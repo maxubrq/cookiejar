@@ -1,7 +1,7 @@
-export default function Logo() {
+export default function Logo({ className }: { className?: string }) {
   return (
-    <div className="logo w-16 h-16 mb-4">
-      <img className="w-full h-full object-contain" src="/logo-rounded.png" alt="Logo" />
+    <div className={`logo ${className}`}>
+      <img className="w-full h-full object-cover" src="/logo-rounded.png" alt="Logo" />
     </div>
   )
 }

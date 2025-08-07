@@ -22,7 +22,7 @@ export default defineManifest({
       128: 'public/logo-128.png',
     },
     default_popup: 'src/popup/index.html',
-    // default_title: 'Open CookieJar',
+    default_title: 'Open CookieJar',
   },
   permissions: [
     'sidePanel',

@@ -1,8 +1,8 @@
-// chrome.sidePanel.setPanelBehavior(
-//     {
-//         openPanelOnActionClick: true,
+chrome.sidePanel.setPanelBehavior(
+    {
+        openPanelOnActionClick: true,
 
-//     }
-// ).catch((error) => {
-//     console.error('Error setting side panel behavior:', error);
-// });
+    }
+).catch((error) => {
+    console.error('Error setting side panel behavior:', error);
+});
