@@ -15,12 +15,9 @@ export class CookieRepo {
      * @param domains The domains to retrieve cookies for.
      * @returns A promise that resolves to an array of cookies.
      */
-    public dumpCookies(domains: string[]): Promise<chrome.cookies.Cookie[]> {
-        return new Promise((resolve) => {
-            chrome.cookies.getAll({ domain: domains.join(',') }, (cookies) => {
-                resolve(cookies);
-            });
-        });
+    public async dumpCookies(domains: string[]): Promise<chrome.cookies.Cookie[]> {
+        const allCookies: chrome.cookies.Cookie[] = await chrome.cookies.getAll({});
+        return allCookies.filter(cookie => domains.includes(cookie.domain));
     }
 
     /**
@@ -28,20 +25,12 @@ export class CookieRepo {
      * @param cookie The cookie to set.
      * @returns A promise that resolves to the set cookie or null if an error occurred.
      */
-    public setCookie(cookie: chrome.cookies.Cookie): Promise<chrome.cookies.Cookie | null> {
-        return new Promise((resolve) => {
-            chrome.cookies.set({
-                ...cookie,
-                url: `https://${cookie.domain}${cookie.path}`,
-            }, (result) => {
-                if (chrome.runtime.lastError) {
-                    console.error(`Error setting cookie: ${chrome.runtime.lastError.message}`);
-                    resolve(null);
-                } else {
-                    resolve(result);
-                }
-            });
+    public async setCookie(cookie: chrome.cookies.Cookie): Promise<chrome.cookies.Cookie | null> {
+        const result = await chrome.cookies.set({
+            ...cookie,
+            url: `https://${cookie.domain}${cookie.path}`,
         });
+        return result;
     }
 
     /**
@@ -49,11 +38,11 @@ export class CookieRepo {
      * @param cookies The cookies to apply.
      * @returns A promise that resolves to an array of the applied cookies.
      */
-    public applyCookies(cookies: chrome.cookies.Cookie[]): Promise<chrome.cookies.Cookie[]> {
-        return new Promise((resolve) => {
-            const promises = cookies.map(cookie => this.setCookie(cookie));
-            Promise.all(promises).then(results => resolve(results.filter(c => c !== null) as chrome.cookies.Cookie[]));
+    public async applyCookies(cookies: chrome.cookies.Cookie[]): Promise<chrome.cookies.Cookie[]> {
+        const promises = cookies.map(cookie => {
+            return this.setCookie(cookie);
         });
+        return Promise.all(promises).then(results => results.filter(cookie => cookie !== null) as chrome.cookies.Cookie[]);
     }
 
     /**
@@ -73,5 +62,12 @@ export class CookieRepo {
         }
 
         chrome.cookies.onChanged.addListener(wrapper);
+    }
+
+    public async getAllFromDomain(url: string): Promise<chrome.cookies.Cookie[]> {
+        const allCookies: chrome.cookies.Cookie[] = await chrome.cookies.getAll({
+            url: url,
+        });
+        return allCookies;
     }
 }

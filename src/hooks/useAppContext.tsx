@@ -21,9 +21,7 @@ export function useCookieJarContext(): CookieJarContextType {
 }
 
 const initialState: CookieJarState = {
-    settings: {
-        ...DEFAULT_CJ_SETTINGS,
-    },
+    settings: DEFAULT_CJ_SETTINGS,
     secrets: {
         ghp: '',
         passPhrase: '',
@@ -40,7 +38,9 @@ function cookieJarReducer(
         case 'SET_SETTINGS':
             return {
                 ...state,
-                settings: action.payload,
+                settings: {
+                    ...action.payload,
+                },
             };
         case 'SET_SECRETS':
             return {
@@ -56,6 +56,75 @@ function cookieJarReducer(
             return {
                 ...state,
                 errorMessage: action.payload,
+            };
+        case 'SET_GITHUB_PAT':
+            return {
+                ...state,
+                secrets: {
+                    ...state.secrets,
+                    ghp: action.payload.ghp,
+                },
+            };
+        case 'SET_PASSPHRASE':
+            return {
+                ...state,
+                secrets: {
+                    ...state.secrets,
+                    passPhrase: action.payload.passPhrase,
+                },
+            };
+        case 'TOGGLE_AUTO_SYNC':
+            return {
+                ...state,
+                settings: {
+                    ...state.settings,
+                    autoSyncEnabled:
+                        action.payload ?? !state.settings.autoSyncEnabled,
+                },
+            };
+        case 'TOGGLE_SYNC_ON_CHANGE':
+            return {
+                ...state,
+                settings: {
+                    ...state.settings,
+                    syncOnChange:
+                        action.payload ?? !state.settings.syncOnChange,
+                },
+            };
+        case 'ADD_SYNC_URL':
+            return {
+                ...state,
+                settings: {
+                    ...state.settings,
+                    syncUrls: [...state.settings.syncUrls, action.payload],
+                },
+            };
+        case 'REMOVE_SYNC_URL':
+            return {
+                ...state,
+                settings: {
+                    ...state.settings,
+                    syncUrls: state.settings.syncUrls.filter(
+                        (url) => url !== action.payload,
+                    ),
+                },
+            };
+        case 'SET_SYNC_URLS':
+            return {
+                ...state,
+                settings: {
+                    ...state.settings,
+                    syncUrls: action.payload,
+                },
+            };
+        case 'SET_SYNC_INTERVAL_MINUTES':
+            return {
+                ...state,
+                settings: {
+                    ...state.settings,
+                    syncIntervalInMinutes:
+                        action.payload ?? state.settings.syncIntervalInMinutes,
+                },
             };
         default:
             return state;

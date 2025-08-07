@@ -62,12 +62,11 @@ export type CjSettings = {
 
     // --- Domain settings ---
     /**
-     * List of domains to sync cookies for.
-     * This setting allows the user to specify which domains should have their cookies synced.
-     * If empty, **NO COOKIES WILL BE SYNCED**.
-     * @example ['example.com', 'another-domain.com']
+     * An array of URLs (domains) to sync cookies for.
+     * This setting is used to specify which domains the extension should sync cookies for.
+     * If empty, the extension will not sync any cookies.
      */
-    syncDomains: string[];
+    syncUrls: string[];
 };
 
 export const DEFAULT_CJ_SETTINGS: CjSettings = {
@@ -76,7 +75,7 @@ export const DEFAULT_CJ_SETTINGS: CjSettings = {
     autoSyncEnabled: true,
     syncIntervalInMinutes: 15,
     syncOnChange: true,
-    syncDomains: [],
+    syncUrls: [],
 };
 
 export type CookieJarState = {
@@ -106,7 +105,15 @@ export type CookieJarAction =
     | { type: 'SET_SETTINGS'; payload: CjSettings }
     | { type: 'SET_SECRETS'; payload: CjSecrets }
     | { type: 'SET_STATUS'; payload: 'idle' | 'syncing' | 'error' }
-    | { type: 'SET_ERROR_MESSAGE'; payload: string | null };
+    | { type: 'SET_ERROR_MESSAGE'; payload: string | null }
+    | { type: 'SET_GITHUB_PAT'; payload: { ghp: string } }
+    | { type: 'SET_PASSPHRASE'; payload: { passPhrase: string } }
+    | { type: 'TOGGLE_AUTO_SYNC'; payload?: boolean }
+    | { type: 'TOGGLE_SYNC_ON_CHANGE'; payload?: boolean }
+    | { type: 'ADD_SYNC_URL'; payload: string }
+    | { type: 'REMOVE_SYNC_URL'; payload: string }
+    | { type: 'SET_SYNC_URLS'; payload: string[] }
+    | { type: 'SET_SYNC_INTERVAL_MINUTES'; payload?: number };
 
 export type CookieJarContextType = {
     state: CookieJarState;
