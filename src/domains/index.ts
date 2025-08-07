@@ -78,3 +78,37 @@ export const DEFAULT_CJ_SETTINGS: CjSettings = {
     syncOnChange: true,
     syncDomains: [],
 };
+
+export type CookieJarState = {
+    /**
+     * The current settings for the CookieJar extension.
+     * This includes user preferences and configurations for syncing cookies.
+     */
+    settings: CjSettings;
+    /**
+     * The current secrets for the CookieJar extension.
+     * This includes sensitive information such as GitHub Personal Access Tokens and encryption passphrases.
+     */
+    secrets: CjSecrets;
+    /**
+     * The current status of the CookieJar extension.
+     * This includes the current state of the extension, such as whether it is syncing cookies or not.
+     */
+    status: 'idle' | 'syncing' | 'error';
+    /**
+     * The current error message, if any.
+     * This is used to display error messages to the user in case of issues with syncing cookies or other operations.
+     */
+    errorMessage: string | null;
+};
+
+export type CookieJarAction =
+    | { type: 'SET_SETTINGS'; payload: CjSettings }
+    | { type: 'SET_SECRETS'; payload: CjSecrets }
+    | { type: 'SET_STATUS'; payload: 'idle' | 'syncing' | 'error' }
+    | { type: 'SET_ERROR_MESSAGE'; payload: string | null };
+
+export type CookieJarContextType = {
+    state: CookieJarState;
+    dispatch: React.Dispatch<CookieJarAction>;
+};
