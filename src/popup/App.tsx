@@ -1,22 +1,16 @@
-import crxLogo from '@/assets/crx.svg'
-import reactLogo from '@/assets/react.svg'
-import viteLogo from '@/assets/vite.svg'
-import HelloWorld from '@/components/HelloWorld'
-import './App.css'
+import Logo from '@/components/Logo';
+import { motion } from 'motion/react';
+import './App.css';
 
 export default function App() {
   return (
-    <div>
-      <a href="https://vite.dev" target="_blank" rel="noreferrer">
-        <img src={viteLogo} className="logo" alt="Vite logo" />
-      </a>
-      <a href="https://reactjs.org/" target="_blank" rel="noreferrer">
-        <img src={reactLogo} className="logo react" alt="React logo" />
-      </a>
-      <a href="https://crxjs.dev/vite-plugin" target="_blank" rel="noreferrer">
-        <img src={crxLogo} className="logo crx" alt="crx logo" />
-      </a>
-      <HelloWorld msg="Vite + React + CRXJS" />
-    </div>
+    <motion.div className='w-full overflow-x-hidden flex flex-col items-center justify-center text-center'>
+      <Logo />
+      <div>
+        <h1>cookiejar</h1>
+        <p>Welcome to the cookiejar extension!</p>
+        <p><strong>CookieJar is used to sync your cookies across devices.</strong></p>
+      </div>
+    </motion.div>
   )
 }

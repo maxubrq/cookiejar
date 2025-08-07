@@ -11,6 +11,9 @@ export default defineManifest({
     48: 'public/logo-rounded.png',
     128: 'public/logo-128.png',
   },
+  background: {
+    service_worker: 'src/background/service-worker.ts',
+  },
   action: {
     default_icon: {
       16: 'public/logo-16.png',
@@ -19,6 +22,7 @@ export default defineManifest({
       128: 'public/logo-128.png',
     },
     default_popup: 'src/popup/index.html',
+    // default_title: 'Open CookieJar',
   },
   permissions: [
     'sidePanel',
