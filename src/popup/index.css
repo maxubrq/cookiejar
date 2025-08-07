@@ -1,25 +1,90 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/*─────────────────────────────────────────────────────────────────*/
+/* 1. CUSTOM VARIANT FOR DARK MODE                                  */
+/*─────────────────────────────────────────────────────────────────*/
+@custom-variant dark (&:is(.dark *));
+
+/*─────────────────────────────────────────────────────────────────*/
+/* 2. BRAND PRIMITIVES & SEMANTIC TOKEN MAP                         */
+/*─────────────────────────────────────────────────────────────────*/
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+  /* — Brand Palette — */
+  --brand-red:    #D6252C;  /* logo background */
+  --brand-cream:  #FFF1E4;  /* jar fill & light text */
+  --brand-black:  #0D0D0D;  /* outlines, text, icons */
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  /* — Semantic Surfaces & Text — */
+  --background:           var(--brand-red);
+  --foreground:           var(--brand-cream);
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
+  --card:                 color-mix(in srgb, var(--brand-cream) 92%, var(--brand-black));
+  --card-foreground:      var(--brand-black);
+
+  /* — Interactive — */
+  --primary:              var(--brand-black);
+  --primary-foreground:   var(--brand-cream);
+
+  --secondary:            var(--brand-cream);
+  --secondary-foreground: var(--brand-black);
+
+  /* — Borders & Focus — */
+  --border:               color-mix(in srgb, var(--brand-black) 20%, var(--brand-cream));
+  --ring:                 var(--brand-black);
+
+  /* — Typography Defaults — */
+  --font-sans:            'Barlow Condensed', sans-serif;
+  --font-serif:           Georgia, serif;
+  --font-mono:            Menlo, monospace;
+
+  /* — Global Text & Page Settings — */
+  font-family:            var(--font-sans);
+  line-height:            1.5;
+  font-weight:            400;
+
+  color-scheme:           light dark;
+  color:                  var(--foreground);
+  background-color:       var(--background);
+
+  text-rendering:         optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-synthesis:         none;
+  tab-size:               4;
+  word-wrap:              anywhere;
 }
 
+/*─────────────────────────────────────────────────────────────────*/
+/* 3. DARK MODE OVERRIDES                                           */
+/*─────────────────────────────────────────────────────────────────*/
+.dark {
+  --background:           var(--brand-black);
+  --foreground:           var(--brand-cream);
+
+  --card:                 color-mix(in srgb, var(--brand-black) 85%, var(--brand-cream));
+  --card-foreground:      var(--brand-cream);
+
+  --primary:              var(--brand-red);
+  --primary-foreground:   var(--brand-cream);
+
+  --secondary:            var(--brand-cream);
+  --secondary-foreground: var(--brand-black);
+
+  --border:               color-mix(in srgb, var(--brand-red) 35%, var(--brand-black));
+  --ring:                 var(--brand-red);
+}
+
+/*─────────────────────────────────────────────────────────────────*/
+/* 4. ELEMENT BASE-STYLES                                           */
+/*─────────────────────────────────────────────────────────────────*/
 a {
   font-weight: 500;
-  color: #646cff;
+  color: var(--primary-foreground);
   text-decoration: inherit;
 }
 a:hover {
-  color: #535bf2;
+  color: var(--primary);
 }
 
 body {
@@ -28,34 +93,47 @@ body {
   place-items: center;
   min-width: 450px;
   min-height: 100vh;
+  background-color: var(--background);
+  color: var(--foreground);
 }
 
 h1 {
   font-size: 3.2em;
   line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 button {
-  border-radius: 8px;
+  border-radius: 9999px;
   border: 1px solid transparent;
   padding: 0.6em 1.2em;
   font-size: 1em;
-  font-weight: 500;
+  font-weight: 600;
   font-family: inherit;
-  background-color: #1a1a1a;
+  background-color: var(--primary);
+  color: var(--primary-foreground);
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: box-shadow 0.25s, border-color 0.25s;
 }
 button:hover {
-  border-color: #646cff;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  border-color: var(--secondary);
 }
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+/*─────────────────────────────────────────────────────────────────*/
+/* 5. LAYOUT & COMPONENTS                                           */
+/*─────────────────────────────────────────────────────────────────*/
 .card {
   padding: 2em;
+  background-color: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 1.3rem);
 }
 
 #app {
@@ -65,15 +143,75 @@ button:focus-visible {
   text-align: center;
 }
 
+/*─────────────────────────────────────────────────────────────────*/
+/* 6. PREFERS-COLOR-SCHEME LIGHT ADJUSTMENTS                       */
+/*─────────────────────────────────────────────────────────────────*/
 @media (prefers-color-scheme: light) {
   :root {
-    color: #213547;
-    background-color: #ffffff;
+    --background: #ffffff;
+    --foreground: #213547;
   }
   a:hover {
     color: #747bff;
   }
   button {
     background-color: #f9f9f9;
+    color: #213547;
   }
+}
+
+/*─────────────────────────────────────────────────────────────────*/
+/* 7. THEME LAYER FOR TAILWIND-UI                                  */
+/*─────────────────────────────────────────────────────────────────*/
+@theme inline {
+  --radius-sm: calc(var(--radius,1.3rem) - 4px);
+  --radius-md: calc(var(--radius,1.3rem) - 2px);
+  --radius-lg: var(--radius,1.3rem);
+  --radius-xl: calc(var(--radius,1.3rem) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input, var(--background));
+  --color-ring: var(--ring);
+}
+
+/*─────────────────────────────────────────────────────────────────*/
+/* 8. BASE LAYER UTILITY TWEAKS                                     */
+/*─────────────────────────────────────────────────────────────────*/
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  /* Primary Button Utility */
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-full
+           px-4 py-2 text-base font-semibold
+           bg-primary text-primary-foreground
+           transition-shadow;
+  }
+  .btn-primary:hover {
+    @apply shadow-lg;
+  }
+}
+
+/*─────────────────────────────────────────────────────────────────*/
+/* 9. OPTIONAL “DELIGHT” ANIMATION                                 */
+/*─────────────────────────────────────────────────────────────────*/
+.animate-cookie {
+  animation: jar-bounce 0.8s ease-out;
+}
+@keyframes jar-bounce {
+  0%, 100% { transform: translateY(0); }
+  40%       { transform: translateY(-6px); }
 }

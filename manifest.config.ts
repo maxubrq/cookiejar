@@ -6,17 +6,26 @@ export default defineManifest({
   name: pkg.name,
   version: pkg.version,
   icons: {
-    48: 'public/logo.png',
+    16: 'public/logo-16.png',
+    32: 'public/logo-32.png',
+    48: 'public/logo-rounded.png',
+    128: 'public/logo-128.png',
   },
   action: {
     default_icon: {
-      48: 'public/logo.png',
+      16: 'public/logo-16.png',
+      32: 'public/logo-32.png',
+      48: 'public/logo-rounded.png',
+      128: 'public/logo-128.png',
     },
     default_popup: 'src/popup/index.html',
   },
   permissions: [
     'sidePanel',
     'contentSettings',
+    'storage',
+    'cookies',
+    'alarms',
   ],
   content_scripts: [{
     js: ['src/content/main.tsx'],
