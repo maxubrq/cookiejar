@@ -6,8 +6,11 @@ import { CryptoService } from '../shared/crypto.service';
 import { GistRepo } from '../shared/gist.repo';
 import { AppEvent, AppStages } from './domain';
 
+
+
 export class PushService {
     private static _instance: PushService;
+
     constructor(
         private port: chrome.runtime.Port,
         protected cookieRepo: CookieRepo = CookieRepo.getInstance(),
@@ -16,6 +19,26 @@ export class PushService {
         protected cryptoService: CryptoService = CryptoService.getInstance(),
     ) {
         this.handlePush = this.handlePush.bind(this);
+
+        // Forward repo-level notices (rate-limit queue events, etc.) to the UI.
+        // We reuse existing stages to avoid changing your enum.
+        this.gistRepo.setNotifier((msg) => {
+            // Map levels to a sensible stage; you can chGitange this if you add WARNING/INFO stages later.
+            const stage =
+                msg.level === 'error' ? AppStages.ERROR : AppStages.PUSH_SENDING;
+            void this.emitEvent(stage, msg.title, undefined, msg.detail);
+        });
+    }
+
+    private formatDuration(ms: number): string {
+        if (ms <= 0) return 'now';
+        const totalSec = Math.ceil(ms / 1000);
+        const hrs = Math.floor(totalSec / 3600);
+        const mins = Math.floor((totalSec % 3600) / 60);
+        const secs = totalSec % 60;
+        if (hrs > 0) return `${hrs}h ${mins}m ${secs}s`;
+        if (mins > 0) return `${mins}m ${secs}s`;
+        return `${secs}s`;
     }
 
     public static getInstance(port: chrome.runtime.Port): PushService {
@@ -38,27 +61,31 @@ export class PushService {
         process?: number,
         error?: string,
     ) {
-        if (this.port) {
-            this.port.postMessage({
-                message,
-                stage,
-                process,
-                error,
-            } as AppEvent);
-        } else {
+        if (!this.port) {
             console.error('Port is not connected');
+            return;
         }
+        this.port.postMessage({
+            message,
+            stage,
+            process,
+            error,
+        } as AppEvent);
     }
 
-    private async handlePush(_: any) {
+    public async handlePush(_: any) {
         try {
+            console.info('Handling push request...');
             await this.emitEvent(AppStages.INITIAL, 'Starting push process');
+
+            // ---- Load settings & secrets ---- //
             const settings = await this.storageRepo.getItem<CjSettings>(
                 LOCAL_STORAGE_KEYS.SETTINGS,
             );
             const secrets = await this.storageRepo.getItem<CjSecrets>(
                 LOCAL_STORAGE_KEYS.SECRETS,
             );
+
             if (!settings || !secrets || !secrets.ghp || !secrets.passPhrase) {
                 await this.emitEvent(
                     AppStages.ERROR,
@@ -69,13 +96,12 @@ export class PushService {
                 return;
             }
 
-            const ghp = atob(secrets.ghp); // Decode the GitHub PAT
-            const passPhrase = atob(secrets.passPhrase); // Decode the passphrase
+            const ghp = atob(secrets.ghp); // GitHub PAT
+            const passPhrase = atob(secrets.passPhrase); // encryption passphrase
 
-            // ---- Dumping cookies ---- //
+            // ---- Dump cookies ---- //
             await this.emitEvent(AppStages.PUSH_DUMPING, 'Dumping data', 0);
-
-            const syncUrls = settings?.syncUrls || [];
+            const syncUrls = settings.syncUrls || [];
             const cookies = await this.cookieRepo.dumpCookies(syncUrls);
             await this.emitEvent(
                 AppStages.PUSH_DUMPING_COMPLETED,
@@ -83,12 +109,8 @@ export class PushService {
                 20,
             );
 
-            // ---- Encrypting cookies ---- //
-            await this.emitEvent(
-                AppStages.PUSH_ENCRYPTING,
-                'Encrypting data',
-                20,
-            );
+            // ---- Encrypt ---- //
+            await this.emitEvent(AppStages.PUSH_ENCRYPTING, 'Encrypting data', 20);
             const encryptedResult = await this.cryptoService.encrypt(
                 cookies,
                 passPhrase,
@@ -108,76 +130,98 @@ export class PushService {
                 40,
             );
 
-            // ---- Sending cookies ---- //
+            // ---- Send to Gist ---- //
             await this.emitEvent(AppStages.PUSH_SENDING, 'Sending data', 40);
+
+            const filesPayload = {
+                [FILE_NAMES.CONTENT_FILE]: { content: encryptedResult },
+                [FILE_NAMES.SETTINGS_FILE]: { content: JSON.stringify(settings) },
+            };
+
             let gistId = settings.gistId;
+
             if (!gistId) {
                 // Create a new Gist
-                gistId = await this.gistRepo.createGist(ghp, {
-                    description: 'CookieJar - Encrypted Cookies',
-                    public: false,
-                    files: {
-                        [FILE_NAMES.CONTENT_FILE]: { content: encryptedResult },
-                        [FILE_NAMES.SETTINGS_FILE]: {
-                            content: JSON.stringify(settings),
-                        },
-                    },
-                });
-                await this.emitEvent(
-                    AppStages.PUSH_SENDING_COMPLETED,
-                    `New Gist created with ID: ${gistId}`,
-                    80,
-                );
+                try {
+                    gistId = await this.gistRepo.createGist(ghp, {
+                        description: 'CookieJar - Encrypted Cookies',
+                        public: false,
+                        files: filesPayload,
+                    });
+                    await this.emitEvent(
+                        AppStages.PUSH_SENDING_COMPLETED,
+                        `New Gist created with ID: ${gistId}`,
+                        80,
+                    );
+                } catch (e: any) {
+                    if (e?.name === 'RateLimitError') {
+                        const waitMs = e.resetAtMs - Date.now();
+                        const waitStr = this.formatDuration(waitMs);
+                        await this.emitEvent(
+                            AppStages.PUSH_SENDING,
+                            `GitHub rate limit — create queued. Will retry automatically in ${waitStr}.`,
+                            80
+                        );
+                        return;
+                    }
+                    throw e;
+                }
             } else {
                 // Update existing Gist
-                const gistData = {
-                    files: {
-                        [FILE_NAMES.CONTENT_FILE]: { content: encryptedResult },
-                        [FILE_NAMES.SETTINGS_FILE]: {
-                            content: JSON.stringify(settings),
-                        },
-                    },
-                };
-                console.log('Updating Gist with ID:', gistId);
-                console.log('Gist Data:', JSON.stringify(gistData, null, 2));
-                await this.gistRepo.updateGist(gistId, gistData, ghp);
-                await this.emitEvent(
-                    AppStages.PUSH_SENDING_COMPLETED,
-                    `Gist updated with ID: ${gistId}`,
-                    80,
-                );
+                try {
+                    const gistData = { files: filesPayload };
+                    console.log('Updating Gist with ID:', gistId);
+                    console.log('Gist Data:', JSON.stringify(gistData, null, 2));
+                    await this.gistRepo.updateGist(gistId, gistData, ghp);
+                    await this.emitEvent(
+                        AppStages.PUSH_SENDING_COMPLETED,
+                        `Gist updated with ID: ${gistId}`,
+                        80,
+                    );
+                } catch (e: any) {
+                    if (e?.name === 'RateLimitError') {
+                        const waitMs = e.resetAtMs - Date.now();
+                        const waitStr = this.formatDuration(waitMs);
+                        await this.emitEvent(
+                            AppStages.PUSH_SENDING,
+                            `GitHub rate limit — update queued. Will retry automatically in ${waitStr}.`,
+                            80
+                        );
+                        return;
+                    }
+                    throw e;
+                }
             }
 
+            // ---- Persist success metadata ---- //
             const newSettings: CjSettings = {
                 ...settings,
                 gistId,
                 lastSyncTimestamp: Date.now(),
             };
+            await this.storageRepo.setItem(LOCAL_STORAGE_KEYS.SETTINGS, newSettings);
 
-            await this.storageRepo.setItem(
-                LOCAL_STORAGE_KEYS.SETTINGS,
-                newSettings,
-            );
-
+            // ---- Done ---- //
             await this.emitEvent(
                 AppStages.PUSH_COMPLETED,
                 'Push process completed successfully',
                 100,
             );
         } catch (error: any) {
+            // If we got here due to a rate limit, we already notified above and returned early.
             console.error('Error handling push message:', error);
             await this.emitEvent(
                 AppStages.ERROR,
                 'An error occurred while processing the push request',
                 undefined,
-                error.message,
+                error?.message,
             );
         }
     }
 
     public sendPushRequest(data: any) {
         if (this.port) {
-            this.port.postMessage({ command: 'push', payload: data });
+            this.port.postMessage({ command: PortCommands.PUSH, payload: data } as PortMessage);
         } else {
             console.error('Port is not connected');
         }

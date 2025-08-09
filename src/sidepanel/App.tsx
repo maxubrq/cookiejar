@@ -42,6 +42,20 @@ export default function App() {
     };
 
     useEffect(() => {
+        const port = state.port;
+        if (!port) return;
+        port.postMessage({
+            command: PortCommands.APPLY_SETTINGS,
+            payload: {
+                ...state.settings,
+            },
+        } as PortMessage);
+    }, [
+        state.port,
+        state.settings,
+    ]);
+
+    useEffect(() => {
         const port = chrome.runtime.connect({ name: PORT_NAME });
         dispatch({ type: 'SET_PORT', payload: port });
 
@@ -56,12 +70,6 @@ export default function App() {
                 fetchSettings();
             }
         });
-        port.postMessage({
-            command: PortCommands.APPLY_SETTINGS,
-            payload: {
-                ...state.settings,
-            },
-        } as PortMessage);
     }, [dispatch]);
 
     useEffect(() => {

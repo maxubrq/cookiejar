@@ -4,13 +4,11 @@ import {
     CookieJarState,
     DEFAULT_CJ_SETTINGS,
 } from '@/domains';
-import { PORT_NAME } from '@/lib';
 import {
     createContext,
     ReactNode,
     useContext,
-    useEffect,
-    useReducer,
+    useReducer
 } from 'react';
 
 const CookieJarContext = createContext<CookieJarContextType | null>(null);

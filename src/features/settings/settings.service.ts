@@ -94,7 +94,9 @@ export class SettingsService {
         );
         this.port.postMessage({
             command: PortCommands.APPLY_SETTINGS,
-            payload: newCjSettings,
+            payload: {
+                ...newCjSettings,
+            },
         } as PortMessage);
         return this._settings;
     }

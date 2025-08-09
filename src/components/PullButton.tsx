@@ -1,9 +1,6 @@
-import { useCookieJarContext } from '@/hooks/useAppContext';
 import { Button } from './ui/button';
 
 export default function PullButton() {
-    const { state } = useCookieJarContext();
-    const { settings } = state;
 
     const handlePull = () => {
         // Logic to pull cookies
