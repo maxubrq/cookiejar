@@ -24,35 +24,41 @@ export function DomainDialog({ children }: { children?: React.ReactNode }) {
     const total = useMemo(() => urls.length, [urls]);
 
     const handleAddDomain = async (raw: string) => {
-        const origin = toOriginPermissionPattern(raw);
-        if (!origin) {
-            toast.error('Enter a valid domain or URL (e.g., example.com or https://site.com).');
-            return;
+        const helper = async (raw: string, variant?: "sub" | "dot") => {
+            const origin = toOriginPermissionPattern(raw, variant);
+            if (!origin) {
+                toast.error('Enter a valid domain or URL (e.g., example.com or https://site.com).');
+                return;
+            }
+
+            if (urls.includes(origin)) {
+                toast.info('This domain is already in your list.');
+                setCurrentDomain('');
+                return;
+            }
+
+            if (!state.port) {
+                toast.error('Port is not connected. Please try again later.');
+                return;
+            }
+
+            const granted = await requestDomainCookieAccess(origin);
+            if (!granted) {
+                toast.error(`Permission denied for: ${origin}. Allow access in Chrome settings.`);
+                return;
+            }
+
+            state.port.postMessage({
+                command: PortCommands.ADD_SYNC_URL,
+                payload: { url: origin },
+            } as PortMessage);
+
+            dispatch({ type: 'ADD_SYNC_URL', payload: origin });
         }
 
-        if (urls.includes(origin)) {
-            toast.info('This domain is already in your list.');
-            setCurrentDomain('');
-            return;
-        }
-
-        if (!state.port) {
-            toast.error('Port is not connected. Please try again later.');
-            return;
-        }
-
-        const granted = await requestDomainCookieAccess(origin);
-        if (!granted) {
-            toast.error(`Permission denied for: ${origin}. Allow access in Chrome settings.`);
-            return;
-        }
-
-        state.port.postMessage({
-            command: PortCommands.ADD_SYNC_URL,
-            payload: { url: origin },
-        } as PortMessage);
-
-        dispatch({ type: 'ADD_SYNC_URL', payload: origin });
+        helper(raw);
+        helper(raw, "sub"); // Also try with subdomain wildcard
+        helper(raw, "dot"); // Also try with dot wildcard
         setCurrentDomain('');
     };
 

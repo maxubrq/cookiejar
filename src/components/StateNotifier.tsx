@@ -132,6 +132,12 @@ export default function StageNotifier() {
             case AppStages.APPLY_SYNC_ON_CHANGE_COMPLETED:
                 toastSuccess(message);
                 break;
+            case AppStages.APPLY_COOKIE_SUCCESS:
+                toastSuccess(message);
+                break;
+            case AppStages.APPLY_COOKIE_FAILED:
+                toastError(message, error);
+                break;
             default:
                 console.warn(`Unhandled stage: ${stage}`);
                 break;

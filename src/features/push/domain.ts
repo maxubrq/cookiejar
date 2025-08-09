@@ -18,6 +18,8 @@ export enum AppStages {
     PULL_DECRYPTING = 'pull_decrypting',
     PULL_DECRYPTING_COMPLETED = 'pull_decrypting_completed',
     PULL_APPLYING = 'pull_applying',
+    PULL_WAIT_FOR_PERMISSION = 'pull_wait_for_permission',
+    PULL_WAIT_FOR_PERMISSION_COMPLETED = 'pull_wait_for_permission_completed',
     PULL_APPLYING_COMPLETED = 'pull_applying_completed',
     PULL_COMPLETED = 'pull_completed',
 
@@ -32,6 +34,8 @@ export enum AppStages {
     APPLY_AUTO_SYNC_INTERVAL_COMPLETED = 'apply_auto_sync_interval_completed',
     APPLY_SYNC_ON_CHANGE = 'apply_sync_on_change',
     APPLY_SYNC_ON_CHANGE_COMPLETED = 'apply_sync_on_change_completed',
+    APPLY_COOKIE_SUCCESS = 'apply_cookie_success',
+    APPLY_COOKIE_FAILED = 'apply_cookie_failed',
 }
 
 export type AppEvent = {
@@ -39,4 +43,6 @@ export type AppEvent = {
     message: string;
     progress?: number; // Optional progress percentage (0-100)
     error?: string; // Optional error message if the stage is ERROR
+    urls?: string[]; // Optional list of URLs involved in the event
+    cookies?: chrome.cookies.Cookie[]; // Optional list of cookies involved in the event
 };

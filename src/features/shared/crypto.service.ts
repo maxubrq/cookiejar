@@ -3,6 +3,7 @@ export type EnryptedContent = {
     salt: string; // Base64 encoded salt used for key derivation
     iv: string; // Base64 encoded initialization vector for AES-GCM
     ct: string; // Base64 encoded ciphertext of the encrypted content
+    ors: string; // Base64 encoded origin permissions
 };
 
 export class CryptoService {
@@ -11,7 +12,7 @@ export class CryptoService {
     private _PBKDF_IV_LENGTH = 12; // 12 bytes for AES-GCM (GCM Standard)
     private static _instance: CryptoService;
 
-    private constructor() {}
+    private constructor() { }
 
     public static getInstance(): CryptoService {
         if (!CryptoService._instance) {
@@ -42,7 +43,7 @@ export class CryptoService {
         const aesKey = await crypto.subtle.deriveKey(
             {
                 name: 'PBKDF2',
-                salt,
+                salt: new Uint8Array(salt).slice().buffer,
                 iterations: this._PBKDF_ITER,
                 hash: 'SHA-256',
             },
@@ -52,15 +53,16 @@ export class CryptoService {
             ['encrypt', 'decrypt'],
         );
 
-        return { aesKey, salt };
+        return { aesKey, salt: new Uint8Array(salt).slice().buffer };
     }
 
-    public async encrypt(plain: any, passPhrase: string): Promise<string> {
+    public async encrypt(plain: any, origins: string[], passPhrase: string): Promise<string> {
         const { aesKey, salt } = await this.deriveKey(passPhrase);
         const iv = crypto.getRandomValues(
             new Uint8Array(this._PBKDF_IV_LENGTH),
         );
         const plaintext = new TextEncoder().encode(JSON.stringify(plain));
+        const plainOrigins = new TextEncoder().encode(JSON.stringify(origins));
 
         const cipherBuf = await crypto.subtle.encrypt(
             { name: 'AES-GCM', iv },
@@ -68,11 +70,18 @@ export class CryptoService {
             plaintext,
         );
 
+        const cipherOrigins = await crypto.subtle.encrypt(
+            { name: 'AES-GCM', iv },
+            aesKey,
+            plainOrigins,
+        );
+
         const content: EnryptedContent = {
             v: 1, // format version
             salt: this.buf2b64(salt),
-            iv: this.buf2b64(iv),
+            iv: this.buf2b64(iv.buffer),
             ct: this.buf2b64(cipherBuf),
+            ors: this.buf2b64(cipherOrigins),
         };
 
         return JSON.stringify(content);
@@ -81,8 +90,11 @@ export class CryptoService {
     public async decrypt(
         encrypted: string,
         passPhrase: string,
-    ): Promise<string> {
-        const { salt, iv, ct } = JSON.parse(encrypted) as EnryptedContent;
+    ): Promise<{
+        plain: any;
+        origins: string[];
+    }> {
+        const { salt, iv, ct, ors } = JSON.parse(encrypted) as EnryptedContent;
         const { aesKey } = await this.deriveKey(
             passPhrase,
             new Uint8Array(this.b642buf(salt)),
@@ -92,6 +104,14 @@ export class CryptoService {
             aesKey,
             this.b642buf(ct),
         );
-        return JSON.parse(new TextDecoder().decode(plainBuf));
+        const plainOrigins = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: new Uint8Array(this.b642buf(iv)) },
+            aesKey,
+            this.b642buf(ors),
+        );
+        return {
+            plain: JSON.parse(new TextDecoder().decode(plainBuf)),
+            origins: JSON.parse(new TextDecoder().decode(plainOrigins)),
+        };
     }
 }

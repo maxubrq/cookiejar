@@ -128,6 +128,7 @@ export enum PortCommands {
 
     // Settings scope commands
     APPLY_SETTINGS = 'apply_settings',
+    APPLY_COOKIES = 'apply_cookies'
 }
 
 export type PortMessage<T = any> = {

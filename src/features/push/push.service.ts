@@ -1,6 +1,6 @@
 import { CjSecrets, CjSettings, PortCommands, PortMessage } from '@/domains';
 import { FILE_NAMES, LOCAL_STORAGE_KEYS } from '@/lib';
-import { LocalStorageRepo } from '../shared';
+import { LocalStorageRepo, toOriginPermissionPattern } from '../shared';
 import { CookieRepo } from '../shared/cookie.repo';
 import { CryptoService } from '../shared/crypto.service';
 import { GistRepo } from '../shared/gist.repo';
@@ -99,8 +99,10 @@ export class PushService {
 
             // ---- Encrypting cookies ---- //
             await this.emitEvent(AppStages.PUSH_ENCRYPTING, 'Encrypting data', 20);
+            const allOrigins = Array.from(new Set(cookies.map((c) => toOriginPermissionPattern(c.domain)))).filter((c) => c !== null);
             const encryptedResult = await this.cryptoService.encrypt(
                 cookies,
+                allOrigins,
                 passPhrase,
             );
             if (!encryptedResult) {
@@ -129,9 +131,6 @@ export class PushService {
                         public: false,
                         files: {
                             [FILE_NAMES.CONTENT_FILE]: { content: encryptedResult },
-                            [FILE_NAMES.SETTINGS_FILE]: {
-                                content: JSON.stringify(settings),
-                            },
                         },
                     });
                     await this.emitEvent(
@@ -143,9 +142,6 @@ export class PushService {
                     const gistData = {
                         files: {
                             [FILE_NAMES.CONTENT_FILE]: { content: encryptedResult },
-                            [FILE_NAMES.SETTINGS_FILE]: {
-                                content: JSON.stringify(settings),
-                            },
                         },
                     };
                     await this.gistRepo.updateGist(gistId, gistData, ghp);
@@ -182,7 +178,7 @@ export class PushService {
 
             await this.emitEvent(
                 AppStages.PUSH_COMPLETED,
-                'Push process completed successfully',
+                `Push process completed successfully -- ${cookies.length} cookies pushed to Gist: ${gistId}`,
                 100,
             );
         } catch (error: any) {

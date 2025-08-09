@@ -6,13 +6,14 @@ import PullButton from '@/components/PullButton';
 import PushButton from '@/components/PushButton';
 import SettingsDialog from '@/components/SettingsDialog';
 import StageNotifier from '@/components/StateNotifier';
+import { Button } from '@/components/ui/button';
 import { CjSecrets, CjSettings, DEFAULT_CJ_SETTINGS, PortCommands, PortMessage } from '@/domains';
 import { AppEvent, AppStages } from '@/features/push';
-import { LocalStorageRepo } from '@/features/shared';
+import { LocalStorageRepo, requestDomainCookieAccess, toOriginPermissionPattern } from '@/features/shared';
 import { useCookieJarContext } from '@/hooks/useAppContext';
 import { LOCAL_STORAGE_KEYS, PORT_NAME } from '@/lib/constants';
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 export default function App() {
@@ -20,6 +21,8 @@ export default function App() {
     const { secrets } = state;
 
     const { dispatch } = useCookieJarContext();
+    const [waitForPermissionUrls, setWaitForPermissionUrls] = useState<string[]>([]);
+    const [waitForPermissionCookies, setWaitForPermissionCookies] = useState<chrome.cookies.Cookie[]>([]);
 
     const fetchSecrets = async () => {
         const localeStorage = LocalStorageRepo.getInstance();
@@ -63,14 +66,38 @@ export default function App() {
             toast.warning('Port disconnected. Please refresh the page.');
         });
 
-        port.onMessage.addListener((message: AppEvent) => {
+        port.onMessage.addListener(async (message: AppEvent) => {
             if (message.stage === AppStages.SETTINGS_UPDATING_COMPLETED) {
                 fetchSettings();
             } else if (message.stage === AppStages.PULL_COMPLETED) {
                 fetchSettings();
+            } else if (message.stage === AppStages.PULL_WAIT_FOR_PERMISSION) {
+                const origins = message.urls ?? [];
+                setWaitForPermissionUrls(origins);
+                setWaitForPermissionCookies(message.cookies ?? []);
             }
         });
-    }, [dispatch]);
+    }, [dispatch, setWaitForPermissionUrls]);
+
+    const onRequestAccess = async () => {
+        if (!state.port) {
+            toast.error('Port is not connected. Please try again later.');
+            return;
+        }
+
+        for (const origin of waitForPermissionUrls) {
+            const granted = await requestDomainCookieAccess(origin);
+            if (!granted) {
+                toast.error(`Permission denied for ${origin}`);
+                continue;
+            }
+        }
+
+        state.port.postMessage({
+            command: PortCommands.APPLY_COOKIES,
+            payload: [...waitForPermissionCookies],
+        } as PortMessage);
+    };
 
     useEffect(() => {
         fetchSecrets();
@@ -176,6 +203,24 @@ export default function App() {
                 )}
             </AnimatePresence>
 
+            <AnimatePresence>
+                {waitForPermissionUrls.length > 0 && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: 0.1 }}
+                        className="flex flex-col items-center justify-center p-4"
+                        layout
+                    >
+                        <p className='text-sm text-red-500 mb-2'>
+                            {`There are ${waitForPermissionUrls.length} domains containing ${waitForPermissionCookies.length} cookies waiting for permission.`}
+                        </p>
+                        <Button variant="default" onClick={onRequestAccess} className='bg-[#333] text-[#fafafa] mt-2'>
+                            Click me to grant access & apply cookies
+                        </Button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
             <StageNotifier />
         </motion.div>
     );

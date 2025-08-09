@@ -195,6 +195,13 @@ function startListeningForPort() {
                     stage: AppStages.APPLY_AUTO_SYNC_INTERVAL_COMPLETED,
                     message: `Auto sync interval set to ${syncIntervalInMinutes} minutes`,
                 });
+            } else {
+                console.info('Disabling auto sync interval');
+                chrome.alarms.clear(AUTO_SYNC_INTERVAL_NAME);
+                port.postMessage(<AppEvent>{
+                    stage: AppStages.APPLY_AUTO_SYNC_INTERVAL_COMPLETED,
+                    message: 'Auto sync disabled',
+                });
             }
 
             // Manage cookie-change debounce wiring based on toggles

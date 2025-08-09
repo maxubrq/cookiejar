@@ -1,10 +1,10 @@
 import { CjSecrets, CjSettings, PortCommands, PortMessage } from '@/domains';
 import { FILE_NAMES, LOCAL_STORAGE_KEYS } from '@/lib';
-import { LocalStorageRepo, requestDomainCookieAccess, toOriginPermissionPattern } from '../shared';
+import { AppEvent, AppStages } from '../push';
+import { LocalStorageRepo, toOriginPermissionPattern } from '../shared';
 import { CookieRepo } from '../shared/cookie.repo';
 import { CryptoService } from '../shared/crypto.service';
 import { GistRepo } from '../shared/gist.repo';
-import { AppEvent, AppStages } from '../push';
 
 export class PullService {
     private static _instance: PullService;
@@ -37,9 +37,55 @@ export class PullService {
     }
 
     public selfRegister() {
-        this.port.onMessage.addListener((message: PortMessage) => {
-            if (message.command !== PortCommands.PULL) return;
-            this.handlePull(message.payload);
+        this.port.onMessage.addListener(async (message: PortMessage) => {
+            if (message.command === PortCommands.PULL) {
+                await this.handlePull(message.payload);
+            } else if (message.command === PortCommands.APPLY_COOKIES) {
+                await this.handleApplyCookies(message.payload as chrome.cookies.Cookie[]);
+            }
+        });
+    }
+
+    protected sleep(ms: number) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    private async handleApplyCookies(cookies: chrome.cookies.Cookie[]) {
+        if (!cookies.length) {
+            return;
+        }
+
+        let appliedCookies: chrome.cookies.Cookie[] = [];
+        let failedCookies: chrome.cookies.Cookie[] = [];
+        for (const c of cookies) {
+            try {
+                await this.cookieRepo.setCookie(c);
+                this.emitEvent(AppStages.APPLY_COOKIE_SUCCESS, 'Cookie applied successfully: ' + c.name);
+                appliedCookies.push(c);
+            } catch (e: any) {
+                console.error('Failed to set cookie:', e);
+                this.emitEvent(AppStages.APPLY_COOKIE_FAILED, 'Failed to apply cookie: ' + c.name, undefined, e?.message ?? '');
+                failedCookies.push(c);
+            }
+            await this.sleep(100); // Throttle to avoid overwhelming the browser
+        }
+
+        await this.emitEvent(AppStages.PULL_APPLYING_COMPLETED, `Applied ${appliedCookies.length} cookies successfully: ${appliedCookies.map(c => c.name).join(', ')}`);
+        if (failedCookies.length) {
+            await this.emitEvent(AppStages.ERROR, `Failed to apply ${failedCookies.length} cookies: ${failedCookies.map(c => c.name).join(', ')}`);
+        }
+
+        const currentSettings = await this.storageRepo.getItem<CjSettings>(
+            LOCAL_STORAGE_KEYS.SETTINGS,
+        );
+        await this.storageRepo.setItem<CjSettings>(LOCAL_STORAGE_KEYS.SETTINGS, {
+            ...currentSettings,
+            lastSyncTimestamp: Date.now(),
+            autoSyncEnabled: currentSettings?.autoSyncEnabled ?? true,
+            syncIntervalInMinutes: currentSettings?.syncIntervalInMinutes ?? 15,
+            syncOnChange: currentSettings?.syncOnChange ?? false,
+            syncUrls: currentSettings?.syncUrls ?? [],
+            gistId: currentSettings?.gistId ?? '',
         });
     }
 
@@ -84,6 +130,12 @@ export class PullService {
     public async handlePull(_: any) {
         try {
             console.info('Handling pull request...');
+            await this.port.postMessage(<AppEvent>{
+                stage: AppStages.PULL_WAIT_FOR_PERMISSION,
+                message: 'Waiting for permission to access cookies',
+                cookies: [],
+                urls: [],
+            } as AppEvent);
             await this.emitEvent(AppStages.INITIAL, 'Starting pull process', 0);
 
             // ---- Load settings & secrets ---- //
@@ -111,35 +163,33 @@ export class PullService {
             await this.emitEvent(AppStages.PULL_DOWNLOADING, 'Resolving Gist source', 10);
             let gistId = currentSettings?.gistId || '';
 
-            if (!gistId) {
-                try {
-                    const latest = await this.gistRepo.findLatestOwnGistByFilenames(
-                        [FILE_NAMES.SETTINGS_FILE, FILE_NAMES.CONTENT_FILE],
-                        ghp,
+            try {
+                const latest = await this.gistRepo.findLatestOwnGistByFilenames(
+                    [FILE_NAMES.CONTENT_FILE],
+                    ghp,
+                );
+                if (!latest) {
+                    await this.emitEvent(
+                        AppStages.ERROR,
+                        'No compatible Gist found',
+                        100,
+                        `Could not find a Gist containing both "${FILE_NAMES.SETTINGS_FILE}" and "${FILE_NAMES.CONTENT_FILE}". Push once from another device or set gistId manually.`,
                     );
-                    if (!latest) {
-                        await this.emitEvent(
-                            AppStages.ERROR,
-                            'No compatible Gist found',
-                            100,
-                            `Could not find a Gist containing both "${FILE_NAMES.SETTINGS_FILE}" and "${FILE_NAMES.CONTENT_FILE}". Push once from another device or set gistId manually.`,
-                        );
-                        return;
-                    }
-                    gistId = latest.id;
-                } catch (e: any) {
-                    if (e?.name === 'RateLimitError') {
-                        const waitMs = e.resetAtMs - Date.now();
-                        const waitStr = this.formatDuration(waitMs);
-                        await this.emitEvent(
-                            AppStages.PULL_DOWNLOADING,
-                            `GitHub rate limit — cannot list gists now. Try again in ${waitStr}.`,
-                            100,
-                        );
-                        return;
-                    }
-                    throw e;
+                    return;
                 }
+                gistId = latest.id;
+            } catch (e: any) {
+                if (e?.name === 'RateLimitError') {
+                    const waitMs = e.resetAtMs - Date.now();
+                    const waitStr = this.formatDuration(waitMs);
+                    await this.emitEvent(
+                        AppStages.PULL_DOWNLOADING,
+                        `GitHub rate limit — cannot list gists now. Try again in ${waitStr}.`,
+                        100,
+                    );
+                    return;
+                }
+                throw e;
             }
 
             // ---- Fetch from Gist ---- //
@@ -162,54 +212,30 @@ export class PullService {
             }
 
             const files = gist?.files || {};
-            const settingsFile = files[FILE_NAMES.SETTINGS_FILE];
             const contentFile = files[FILE_NAMES.CONTENT_FILE];
 
-            if (!settingsFile?.content || !contentFile?.content) {
+            if (!contentFile?.content) {
                 await this.emitEvent(
                     AppStages.ERROR,
                     'Incomplete gist content',
                     100,
-                    `Expected files "${FILE_NAMES.SETTINGS_FILE}" and "${FILE_NAMES.CONTENT_FILE}" not found.`,
+                    `Expected files "${FILE_NAMES.CONTENT_FILE}" not found.`,
                 );
                 return;
             }
 
             await this.emitEvent(AppStages.PULL_DOWNLOADING_COMPLETED, 'Download completed', 40);
 
-            // ---- Persist pulled settings ---- //
-            await this.emitEvent(AppStages.SETTINGS_UPDATING, 'Syncing settings locally', 45);
-            let pulledSettings: CjSettings;
-            try {
-                pulledSettings = JSON.parse(settingsFile.content) as CjSettings;
-            } catch (e: any) {
-                await this.emitEvent(
-                    AppStages.ERROR,
-                    'Invalid settings content',
-                    100,
-                    e?.message ?? 'Failed to parse settings JSON from Gist.',
-                );
-                return;
-            }
-
-            const mergedSettings: CjSettings = {
-                ...(currentSettings ?? ({} as CjSettings)),
-                ...pulledSettings,
-                gistId, // bind to discovered gistId
-                lastSyncTimestamp: Date.now(),
-            };
-
-            await this.storageRepo.setItem(LOCAL_STORAGE_KEYS.SETTINGS, mergedSettings);
-            await this.emitEvent(AppStages.SETTINGS_UPDATING_COMPLETED, 'Settings persisted', 55);
-
             // ---- Decrypt cookies ---- //
             await this.emitEvent(AppStages.PULL_DECRYPTING, 'Decrypting cookies', 60);
             let cookies: chrome.cookies.Cookie[] = [];
+            let origins: string[] = [];
             try {
-                const decrypted: any = await this.cryptoService.decrypt(
+                const { plain: decrypted, origins: decryptedOrigins } = await this.cryptoService.decrypt(
                     contentFile.content,
                     passPhrase,
                 );
+                origins = decryptedOrigins;
                 cookies = Array.isArray(decrypted) ? (decrypted as chrome.cookies.Cookie[]) : [];
             } catch (e: any) {
                 await this.emitEvent(
@@ -225,32 +251,15 @@ export class PullService {
             // ---- Apply cookies ---- //
             await this.emitEvent(AppStages.PULL_APPLYING, 'Applying cookies', 75);
             try {
-                const allUrls = Array.from(new Set(cookies.map(cookie => cookie.domain)));
-                for (const url of allUrls) {
-                    const origin = await toOriginPermissionPattern(url);
-                    if (!origin) {
-                        await this.emitEvent(
-                            AppStages.ERROR,
-                            'Invalid domain',
-                            100,
-                            `Cannot apply cookies for invalid domain: ${url}`,
-                        );
-                        continue;
-                    }
-                    const granted = await requestDomainCookieAccess(origin);
-                    if (!granted) {
-                        await this.emitEvent(
-                            AppStages.ERROR,
-                            'Permission denied',
-                            100,
-                            `Cannot apply cookies for ${origin}. Please allow access in Chrome settings.`,
-                        );
-                        continue;
-                    }
-
-                    const cookiesOfOrigin = cookies.filter(cookie => cookie.domain === url);
-                    await this.cookieRepo.applyCookies(cookiesOfOrigin);
-                }
+                console.info('Applying cookies for origins:', origins);
+                this.port.postMessage(<AppEvent>{
+                    stage: AppStages.PULL_WAIT_FOR_PERMISSION,
+                    message: 'Requesting permission to access cookie domains',
+                    progress: 80,
+                    urls: origins,
+                    cookies: cookies
+                });
+                return;
             } catch (e: any) {
                 await this.emitEvent(
                     AppStages.ERROR,
@@ -259,24 +268,15 @@ export class PullService {
                     e?.message,
                 );
                 return;
+            } finally {
+                await this.storageRepo.setItem<CjSettings>(LOCAL_STORAGE_KEYS.SETTINGS, {
+                    autoSyncEnabled: currentSettings?.autoSyncEnabled ?? true,
+                    syncIntervalInMinutes: currentSettings?.syncIntervalInMinutes ?? 15,
+                    syncOnChange: currentSettings?.syncOnChange ?? false,
+                    syncUrls: currentSettings?.syncUrls ?? [],
+                    gistId,
+                });
             }
-            await this.emitEvent(AppStages.PULL_APPLYING_COMPLETED, 'Cookies applied', 85);
-
-            // ---- Re-apply settings to activate alarms/listeners ---- //
-            await this.emitEvent(AppStages.APPLY_SYNC_ON_CHANGE, 'Activating settings', 90);
-            try {
-                this.port.postMessage({
-                    command: PortCommands.APPLY_SETTINGS,
-                    payload: mergedSettings,
-                } as PortMessage);
-            } catch (e: any) {
-                // Non-fatal; settings were still persisted
-                console.warn('Failed to trigger APPLY_SETTINGS:', e);
-            }
-            await this.emitEvent(AppStages.APPLY_SYNC_ON_CHANGE_COMPLETED, 'Settings activated', 95);
-
-            // ---- Done ---- //
-            await this.emitEvent(AppStages.PULL_COMPLETED, 'Pull completed', 100);
         } catch (error: any) {
             console.error('Error handling pull request:', error);
             await this.emitEvent(

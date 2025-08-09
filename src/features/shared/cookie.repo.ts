@@ -1,7 +1,7 @@
 export class CookieRepo {
     private static _instance: CookieRepo;
 
-    private constructor() {}
+    private constructor() { }
 
     public static getInstance(): CookieRepo {
         if (!CookieRepo._instance) {
@@ -32,20 +32,29 @@ export class CookieRepo {
     public async setCookie(
         cookie: chrome.cookies.Cookie,
     ): Promise<chrome.cookies.Cookie | null> {
-        const result = await chrome.cookies.set({
-            url: cookie.domain ? `https://${cookie.domain}` : '',
-            name: cookie.name,
-            value: cookie.value,
-            domain: cookie.domain,
-            expirationDate: cookie.expirationDate,
-            httpOnly: cookie.httpOnly,
-            secure: cookie.secure,
-            path: cookie.path,
-            partitionKey: cookie.partitionKey,
-            sameSite: cookie.sameSite,
-            storeId: cookie.storeId,
-        });
-        return result;
+        const domainUrl = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain;
+        const cookieCopy = { ...cookie, url: cookie.domain ? `${cookie.secure ? 'https' : 'http'}://${domainUrl}` : '' };
+        delete (cookieCopy as any).hostOnly;
+        delete (cookieCopy as any).session; // session cookies are not supported by chrome.cookies.set
+        try {
+            if (cookie.name.startsWith('__Host-')) {
+                const hostCookie = {
+                    ...cookieCopy,
+                    path: '/',
+                    secure: true
+                }
+
+                delete (hostCookie as any).domain; // __Host- cookies must not have a domain
+                const result = await chrome.cookies.set(hostCookie);
+                return result;
+            } else {
+                const result = await chrome.cookies.set(cookieCopy);
+                return result;
+            }
+        } catch (error) {
+            console.error('Error setting cookie:', error, JSON.stringify(cookieCopy));
+            throw error;
+        }
     }
 
     /**
@@ -59,11 +68,11 @@ export class CookieRepo {
         const promises = cookies.map((cookie) => {
             return this.setCookie(cookie);
         });
-        return Promise.all(promises).then(
-            (results) =>
-                results.filter(
-                    (cookie) => cookie !== null,
-                ) as chrome.cookies.Cookie[],
+
+        return Promise.allSettled(promises).then((results) =>
+            results
+                .filter((result) => result.status === 'fulfilled')
+                .map((result) => result.value) as chrome.cookies.Cookie[],
         );
     }
 
