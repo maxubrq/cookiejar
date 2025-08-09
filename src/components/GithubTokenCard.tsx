@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
+import { Button } from './ui/button';
 
 export function GithubTokenCard() {
     const { dispatch, state } = useCookieJarContext();
@@ -12,13 +13,13 @@ export function GithubTokenCard() {
 
     const onSaveGhp = () => {
         // Dispatch an action to set the GitHub PAT in the context
-        dispatch({ type: 'SET_GITHUB_PAT', payload: { ghp } });
+        dispatch({ type: 'SET_GITHUB_PAT', payload: { ghp: btoa(ghp) } });
 
         const storageRepo = LocalStorageRepo.getInstance();
         // Save the GitHub PAT to local storage
         storageRepo.setItem(LOCAL_STORAGE_KEYS.SECRETS, {
             ...state.secrets,
-            ghp,
+            ghp: btoa(ghp), // Encode the PAT
         });
 
         toast.success('GitHub Personal Access Token saved successfully!');
@@ -49,12 +50,12 @@ export function GithubTokenCard() {
                     value={ghp}
                     onChange={(e) => setGhp(e.target.value)}
                 />
-                <button
-                    className="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                <Button
                     onClick={onSaveGhp}
+                    className='bg-[#000] text-white hover:bg-[#333] mt-4'
                 >
                     Save Token
-                </button>
+                </Button>
             </Card>
         </>
     );

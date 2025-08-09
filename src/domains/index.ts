@@ -26,17 +26,12 @@ export type CjSecrets = {
  * This type is used to store user preferences and configurations for syncing cookies and other related settings.
  */
 export type CjSettings = {
-    // --- General settings ---
     /**
-     * The ID of the Gist used to store settings related to the CookieJar extension.
-     * This Gist is used to store user preferences and configurations.
+     * The ID of the Gist used to store the encrypted content and settings.
+     * This Gist is used to store the encrypted cookie data and settings for the extension.
+     * If this is not set, the extension will not be able to sync cookies.
      */
-    settingsGistId?: string;
-    /**
-     * The ID of the Gist used to store the encrypted content.
-     * This Gist is used to store the encrypted cookies and other sensitive data.
-     */
-    contentGistId?: string;
+    gistId?: string;
 
     // --- Sync settings ---
     /**
@@ -67,15 +62,21 @@ export type CjSettings = {
      * If empty, the extension will not sync any cookies.
      */
     syncUrls: string[];
+
+    /**
+     * Timestamp of the last successful sync.
+     * This is used to determine when the last sync occurred and can be used for debugging or logging purposes.
+     */
+    lastSyncTimestamp?: number; // Timestamp of the last successful sync
 };
 
 export const DEFAULT_CJ_SETTINGS: CjSettings = {
-    settingsGistId: undefined,
-    contentGistId: undefined,
+    gistId: undefined,
     autoSyncEnabled: true,
     syncIntervalInMinutes: 15,
     syncOnChange: true,
     syncUrls: [],
+    lastSyncTimestamp: undefined,
 };
 
 export type CookieJarState = {
@@ -91,14 +92,9 @@ export type CookieJarState = {
     secrets: CjSecrets;
     /**
      * The current status of the CookieJar extension.
-     * This includes the current state of the extension, such as whether it is syncing cookies or not.
+     * This can be 'idle', 'syncing', or 'error'.
      */
-    status: 'idle' | 'syncing' | 'error';
-    /**
-     * The current error message, if any.
-     * This is used to display error messages to the user in case of issues with syncing cookies or other operations.
-     */
-    errorMessage: string | null;
+    port: chrome.runtime.Port | null;
 };
 
 export type CookieJarAction =
@@ -113,9 +109,28 @@ export type CookieJarAction =
     | { type: 'ADD_SYNC_URL'; payload: string }
     | { type: 'REMOVE_SYNC_URL'; payload: string }
     | { type: 'SET_SYNC_URLS'; payload: string[] }
-    | { type: 'SET_SYNC_INTERVAL_MINUTES'; payload?: number };
+    | { type: 'SET_SYNC_INTERVAL_MINUTES'; payload?: number }
+    | { type: 'SET_PORT'; payload: chrome.runtime.Port };
 
 export type CookieJarContextType = {
     state: CookieJarState;
     dispatch: React.Dispatch<CookieJarAction>;
+};
+
+export enum PortCommands {
+    PUSH = 'push',
+    PULL = 'pull',
+
+    // Storage scope commands
+    ADD_SYNC_URL = 'add_sync_url',
+    REMOVE_SYNC_URL = 'remove_sync_url',
+    SET_SETTINGS = 'set_settings',
+
+    // Settings scope commands
+    APPLY_SETTINGS = 'apply_settings',
+}
+
+export type PortMessage<T = any> = {
+    command: PortCommands;
+    payload?: T;
 };

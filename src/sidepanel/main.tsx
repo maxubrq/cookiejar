@@ -1,15 +1,14 @@
-import { StrictMode } from 'react';
+import { CookieJarContextProvider } from '@/hooks/useAppContext.tsx';
 import { createRoot } from 'react-dom/client';
+import { Toaster } from 'sonner';
 import App from './App.tsx';
 import './index.css';
-import { CookieJarContextProvider } from '@/hooks/useAppContext.tsx';
-import { Toaster } from 'sonner';
 
 createRoot(document.getElementById('root')!).render(
-    <StrictMode>
+    <>
         <CookieJarContextProvider>
             <App />
         </CookieJarContextProvider>
         <Toaster />
-    </StrictMode>,
+    </>
 );

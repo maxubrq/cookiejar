@@ -1,6 +1,6 @@
+import { PortCommands, PortMessage } from '@/domains';
 import { useCookieJarContext } from '@/hooks/useAppContext';
-import { useState } from 'react';
-import { toast } from 'sonner';
+import { useMemo, useState } from 'react';
 import { Button } from './ui/button';
 import {
     Dialog,
@@ -10,51 +10,83 @@ import {
     DialogTrigger,
 } from './ui/dialog';
 import { Input } from './ui/input';
-import { CookieRepo } from '@/features/shared/cookie.repo';
+import { toast } from 'sonner';
 
-async function requestDomainCookieAccess(domain: string): Promise<boolean> {
-    const permission = { origins: [domain] };
+// --- helpers ---------------------------------------------------------------
 
+function toOriginPermissionPattern(input: string): string | null {
+    try {
+        // Accept "example.com", "http://example.com", "https://sub.example.com/path"
+        const raw = input.trim();
+        const url = raw.includes('://') ? new URL(raw) : new URL(`https://${raw}`);
+        // Chrome permission origin must include scheme and path wildcard
+        return `${url.protocol}//${url.hostname}/*`;
+    } catch {
+        return null;
+    }
+}
+
+async function requestDomainCookieAccess(originPattern: string): Promise<boolean> {
     return new Promise((resolve) => {
-        chrome.permissions.request(permission, (granted) => {
-            resolve(granted);
-        });
+        chrome.permissions.request({ origins: [originPattern] }, (granted) => resolve(granted));
     });
 }
+
+// --------------------------------------------------------------------------
 
 export function DomainDialog({ children }: { children?: React.ReactNode }) {
     const { state, dispatch } = useCookieJarContext();
     const { settings } = state;
-    const { syncUrls: urls } = settings;
+    const urls = settings.syncUrls;
     const [currentDomain, setCurrentDomain] = useState<string>('');
 
-    const handleAddDomain = async (domain: string) => {
-        if (!domain) return;
-        if (urls.includes(domain)) {
-            toast.error(`Domain ${domain} is already added.`);
+    const total = useMemo(() => urls.length, [urls]);
+
+    const handleAddDomain = async (raw: string) => {
+        const origin = toOriginPermissionPattern(raw);
+        if (!origin) {
+            toast.error('Enter a valid domain or URL (e.g., example.com or https://site.com).');
             return;
         }
 
-        const granted = await requestDomainCookieAccess(domain);
+        if (urls.includes(origin)) {
+            toast.info('This domain is already in your list.');
+            setCurrentDomain('');
+            return;
+        }
+
+        if (!state.port) {
+            toast.error('Port is not connected. Please try again later.');
+            return;
+        }
+
+        const granted = await requestDomainCookieAccess(origin);
         if (!granted) {
-            toast.error(
-                `Permission denied for domain: ${domain}. Please allow access in Chrome settings.`,
-            );
+            toast.error(`Permission denied for: ${origin}. Allow access in Chrome settings.`);
             return;
         }
 
-        dispatch({ type: 'ADD_SYNC_URL', payload: domain });
-        setCurrentDomain('');
+        state.port.postMessage({
+            command: PortCommands.ADD_SYNC_URL,
+            payload: { url: origin },
+        } as PortMessage);
 
-        const cookiesRepo = CookieRepo.getInstance();
-        const cookies = await cookiesRepo.getAllFromDomain(domain);
-        toast.success(
-            `Added domain: ${domain} with ${cookies.length} cookies.`,
-        );
+        dispatch({ type: 'ADD_SYNC_URL', payload: origin });
+        setCurrentDomain('');
     };
 
-    const handleRemoveDomain = (domain: string) => {
-        dispatch({ type: 'REMOVE_SYNC_URL', payload: domain });
+    const handleRemoveDomain = (origin: string) => {
+        if (!state.port) {
+            toast.error('Port is not connected. Please try again later.');
+            return;
+        }
+
+        state.port.postMessage({
+            command: PortCommands.REMOVE_SYNC_URL,
+            payload: { url: origin },
+        } as PortMessage);
+
+        dispatch({ type: 'REMOVE_SYNC_URL', payload: origin });
     };
 
     return (
@@ -63,62 +95,71 @@ export function DomainDialog({ children }: { children?: React.ReactNode }) {
                 <DialogTrigger className="domain-dialog-trigger">
                     {children || 'Manage Domains'}
                 </DialogTrigger>
-                <DialogContent className="domain-dialog-content bg-white shadow-lg rounded-lg">
-                    <DialogTitle className="text-[var(--brand-red)]">
+
+                <DialogContent className="max-w-lg p-6 bg-white shadow-lg rounded-lg">
+                    <DialogTitle className="text-lg font-semibold mb-2 text-[var(--color-primary,#db302a)]">
                         Manage Sync Domains
                     </DialogTitle>
                     <DialogDescription className="text-sm text-gray-500 mb-4">
-                        Add or remove domains to sync cookies for.
+                        Add or remove domains whose cookies you want to sync.
                     </DialogDescription>
 
                     {/* ADD DOMAIN */}
-                    <div className="flex flex-row items-center gap-2 mb-4">
+                    <div className="grid grid-cols-[1fr_auto] gap-3 mb-4">
                         <Input
                             type="text"
-                            placeholder="Enter domain"
-                            className="flex-1 text-[#333] border border-gray-300 rounded-md p-2"
+                            placeholder="example.com or https://sub.example.com"
+                            className="text-[#333] border border-gray-300 rounded-md"
                             value={currentDomain}
                             onChange={(e) => setCurrentDomain(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    handleAddDomain(e.currentTarget.value);
+                            onKeyDown={async (e) => {
+                                if (e.key === 'Enter' && currentDomain.trim()) {
+                                    await handleAddDomain(currentDomain);
                                 }
                             }}
                         />
-
                         <Button
-                            onClick={() => {
-                                if (currentDomain) {
-                                    handleAddDomain(currentDomain);
+                            onClick={async () => {
+                                if (currentDomain.trim()) {
+                                    await handleAddDomain(currentDomain);
                                 }
                             }}
                         >
-                            Add Domain
+                            Add
                         </Button>
                     </div>
 
+                    {/* DOMAIN LIST HEADER */}
+                    <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm text-[#333] font-medium">Allowed domains</p>
+                        <p className="text-xs text-gray-500">{total ? `Total: ${total}` : 'None'}</p>
+                    </div>
+
                     {/* DOMAIN LIST */}
-                    <p className="text-[#333]">
-                        {urls.length
-                            ? `Total: ${urls.length}`
-                            : 'No domains added'}
-                    </p>
-                    <div className="domain-list w-full">
-                        {urls.map((url) => (
-                            <div
-                                key={url}
-                                className="domain-item flex items-center justify-between"
-                            >
-                                <span className="text-[#333]">{url}</span>
-                                <button
-                                    onClick={() => handleRemoveDomain(url)}
-                                    className="remove-domain-button"
-                                >
-                                    Remove
-                                </button>
-                                <hr className="my-2 border-gray-300" />
-                            </div>
-                        ))}
+                    <div className="w-full rounded-md border border-gray-200">
+                        {urls.length === 0 ? (
+                            <div className="p-3 text-sm text-gray-500">No domains added.</div>
+                        ) : (
+                            <ul className="divide-y divide-gray-200">
+                                {urls.map((origin) => (
+                                    <li
+                                        key={origin}
+                                        className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-2"
+                                    >
+                                        <span className="truncate text-[#333]" title={origin}>
+                                            {origin}
+                                        </span>
+                                        <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            onClick={() => handleRemoveDomain(origin)}
+                                        >
+                                            Remove
+                                        </Button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
                     </div>
                 </DialogContent>
             </Dialog>

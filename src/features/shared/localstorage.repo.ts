@@ -6,7 +6,7 @@
 export class LocalStorageRepo {
     private static _instance: LocalStorageRepo;
 
-    private constructor() { }
+    private constructor() {}
 
     /**
      * Gets the singleton instance of LocalStorageRepo.
@@ -24,7 +24,7 @@ export class LocalStorageRepo {
      * Gets an item from local storage by key.
      * @param key The key of the item to retrieve.
      * @returns A promise that resolves to the item value or null if not found.
-     * 
+     *
      * @example
      * ```typescript
      * const value = await LocalStorageRepo.getInstance().getItem('myKey');
@@ -39,7 +39,10 @@ export class LocalStorageRepo {
                     try {
                         resolve(JSON.parse(item) as T);
                     } catch (e) {
-                        console.error(`Error parsing item from localStorage for key "${key}":`, e);
+                        console.error(
+                            `Error parsing item from localStorage for key "${key}":`,
+                            e,
+                        );
                         resolve(null);
                     }
                 } else {
@@ -53,7 +56,7 @@ export class LocalStorageRepo {
      * Sets an item in local storage by key.
      * @param key The key of the item to set.
      * @param value The value to store, which will be stringified.
-     * 
+     *
      * @example
      * ```typescript
      * await LocalStorageRepo.getInstance().setItem('myKey', { foo: 'bar' });

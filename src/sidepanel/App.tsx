@@ -2,47 +2,71 @@ import { DomainDialog } from '@/components/DomainDialog';
 import { GithubTokenCard } from '@/components/GithubTokenCard';
 import Logo from '@/components/Logo';
 import PassPhraseCard from '@/components/PassPhraseCard';
+import PullButton from '@/components/PullButton';
+import PushButton from '@/components/PushButton';
 import SettingsDialog from '@/components/SettingsDialog';
+import StageNotifier from '@/components/StateNotifier';
+import { CjSecrets, CjSettings, DEFAULT_CJ_SETTINGS, PortCommands, PortMessage } from '@/domains';
+import { AppEvent, AppStages } from '@/features/push';
 import { LocalStorageRepo } from '@/features/shared';
 import { useCookieJarContext } from '@/hooks/useAppContext';
-import { LOCAL_STORAGE_KEYS } from '@/lib/constants';
+import { LOCAL_STORAGE_KEYS, PORT_NAME } from '@/lib/constants';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect } from 'react';
+import { toast } from 'sonner';
 
 export default function App() {
     const { state } = useCookieJarContext();
-    const { settings, secrets } = state;
+    const { secrets } = state;
 
     const { dispatch } = useCookieJarContext();
 
+    const fetchSecrets = async () => {
+        const localeStorage = LocalStorageRepo.getInstance();
+        const secrets = await localeStorage.getItem<CjSecrets>(LOCAL_STORAGE_KEYS.SECRETS);
+        if (secrets) {
+            dispatch({ type: 'SET_SECRETS', payload: secrets });
+        }
+    };
+
+    const fetchSettings = async () => {
+        const localeStorage = LocalStorageRepo.getInstance();
+        const settings = await localeStorage.getItem<CjSettings>(LOCAL_STORAGE_KEYS.SETTINGS);
+        if (settings) {
+            dispatch({ type: 'SET_SETTINGS', payload: settings });
+        } else {
+            localeStorage.setItem<CjSettings>(LOCAL_STORAGE_KEYS.SETTINGS, {
+                ...DEFAULT_CJ_SETTINGS,
+            });
+        }
+    };
+
     useEffect(() => {
-        const fetchSecrets = async () => {
-            const localeStorage = LocalStorageRepo.getInstance();
-            const secrets = await localeStorage.getItem<{
-                ghp?: string;
-                passPhrase?: string;
-            }>(LOCAL_STORAGE_KEYS.SECRETS);
+        const port = chrome.runtime.connect({ name: PORT_NAME });
+        dispatch({ type: 'SET_PORT', payload: port });
 
-            if (secrets?.ghp) {
-                dispatch({
-                    type: 'SET_GITHUB_PAT',
-                    payload: {
-                        ghp: secrets.ghp,
-                    },
-                });
+        port.onDisconnect.addListener(() => {
+            toast.warning('Port disconnected. Please refresh the page.');
+        });
+
+        port.onMessage.addListener((message: AppEvent) => {
+            if (message.stage === AppStages.SETTINGS_UPDATING_COMPLETED) {
+                fetchSettings();
+            } else if (message.stage === AppStages.PULL_COMPLETED) {
+                fetchSettings();
             }
+        });
+        port.postMessage({
+            command: PortCommands.APPLY_SETTINGS,
+            payload: {
+                ...state.settings,
+            },
+        } as PortMessage);
+    }, [dispatch]);
 
-            if (secrets?.passPhrase) {
-                dispatch({
-                    type: 'SET_PASSPHRASE',
-                    payload: {
-                        passPhrase: secrets.passPhrase,
-                    },
-                });
-            }
-        };
-
+    useEffect(() => {
         fetchSecrets();
+        fetchSettings();
     }, [dispatch]);
 
     return (
@@ -51,8 +75,12 @@ export default function App() {
             layout
         >
             <div className="flex flex-row justify-end w-full p-4 gap-2 absolute top-0 right-0">
-                <SettingsDialog>Settings</SettingsDialog>
-                <DomainDialog>Domains</DomainDialog>
+                <SettingsDialog>
+                    <button className='bg-[#333] text-[#fafafa] rounded-full px-4 py-2'>Settings</button>
+                </SettingsDialog>
+                <DomainDialog>
+                    <button className='bg-[#333] text-[#fafafa] rounded-full px-4 py-2'>Domains</button>
+                </DomainDialog>
             </div>
 
             <motion.div
@@ -112,6 +140,35 @@ export default function App() {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Sync & Pull Manual buttons */}
+            <AnimatePresence>
+                {secrets.ghp && secrets.passPhrase && (
+                    <motion.div
+                        className='flex flex-col items-center justify-center p-4'
+                    >
+                        {/* LAST SYNC */}
+                        {
+                            state.settings.lastSyncTimestamp && (
+                                <p className="text-sm text-gray-500 mb-2">
+                                    Last Sync: {new Date(state.settings.lastSyncTimestamp).toLocaleString()}
+                                </p>
+                            )
+                        }
+                        <motion.div
+                            initial={{ opacity: 0, y: -20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3, delay: 0.1 }}
+                            className="flex flex-row items-center justify-center p-4 gap-4"
+                        >
+                            <PushButton />
+                            <PullButton />
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <StageNotifier />
         </motion.div>
     );
 }

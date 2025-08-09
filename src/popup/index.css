@@ -1,217 +1,151 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/*─────────────────────────────────────────────────────────────────*/
-/* 1. CUSTOM VARIANT FOR DARK MODE                                  */
-/*─────────────────────────────────────────────────────────────────*/
-@custom-variant dark (&:is(.dark *));
-
-/*─────────────────────────────────────────────────────────────────*/
-/* 2. BRAND PRIMITIVES & SEMANTIC TOKEN MAP                         */
-/*─────────────────────────────────────────────────────────────────*/
 :root {
-  /* — Brand Palette — */
-  --brand-red:    #D6252C;  /* logo background */
-  --brand-cream:  #FFF1E4;  /* jar fill & light text */
-  --brand-black:  #0D0D0D;  /* outlines, text, icons */
-
-  /* — Semantic Surfaces & Text — */
-  --background:           var(--brand-red);
-  --foreground:           var(--brand-cream);
-
-  --card:                 color-mix(in srgb, var(--brand-cream) 92%, var(--brand-black));
-  --card-foreground:      var(--brand-black);
-
-  /* — Interactive — */
-  --primary:              var(--brand-black);
-  --primary-foreground:   var(--brand-cream);
-
-  --secondary:            var(--brand-cream);
-  --secondary-foreground: var(--brand-black);
-
-  /* — Borders & Focus — */
-  --border:               color-mix(in srgb, var(--brand-black) 20%, var(--brand-cream));
-  --ring:                 var(--brand-black);
-
-  /* — Typography Defaults — */
-  --font-sans:            'Barlow Condensed', sans-serif;
-  --font-serif:           Georgia, serif;
-  --font-mono:            Menlo, monospace;
-
-  /* — Global Text & Page Settings — */
-  font-family:            var(--font-sans);
-  line-height:            1.5;
-  font-weight:            400;
-
-  color-scheme:           light dark;
-  color:                  var(--foreground);
-  background-color:       var(--background);
-
-  text-rendering:         optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  font-synthesis:         none;
-  tab-size:               4;
-  word-wrap:              anywhere;
+  --background: #f8f9fa;
+  --foreground: #0c0c1d;
+  --card: #ffffff;
+  --card-foreground: #0c0c1d;
+  --popover: #ffffff;
+  --popover-foreground: #0c0c1d;
+  --primary: #ff00c8;
+  --primary-foreground: #ffffff;
+  --secondary: #f0f0ff;
+  --secondary-foreground: #0c0c1d;
+  --muted: #f0f0ff;
+  --muted-foreground: #0c0c1d;
+  --accent: #00ffcc;
+  --accent-foreground: #0c0c1d;
+  --destructive: #ff3d00;
+  --destructive-foreground: #ffffff;
+  --border: #dfe6e9;
+  --input: #dfe6e9;
+  --ring: #ff00c8;
+  --chart-1: #ff00c8;
+  --chart-2: #9000ff;
+  --chart-3: #00e5ff;
+  --chart-4: #00ffcc;
+  --chart-5: #ffe600;
+  --sidebar: #f0f0ff;
+  --sidebar-foreground: #0c0c1d;
+  --sidebar-primary: #ff00c8;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #00ffcc;
+  --sidebar-accent-foreground: #0c0c1d;
+  --sidebar-border: #dfe6e9;
+  --sidebar-ring: #ff00c8;
+  --font-sans: Outfit, sans-serif;
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: Fira Code, monospace;
+  --radius: 0.5rem;
+  --shadow-2xs: 0px 4px 8px -2px hsl(0 0% 0% / 0.05);
+  --shadow-xs: 0px 4px 8px -2px hsl(0 0% 0% / 0.05);
+  --shadow-sm: 0px 4px 8px -2px hsl(0 0% 0% / 0.10), 0px 1px 2px -3px hsl(0 0% 0% / 0.10);
+  --shadow: 0px 4px 8px -2px hsl(0 0% 0% / 0.10), 0px 1px 2px -3px hsl(0 0% 0% / 0.10);
+  --shadow-md: 0px 4px 8px -2px hsl(0 0% 0% / 0.10), 0px 2px 4px -3px hsl(0 0% 0% / 0.10);
+  --shadow-lg: 0px 4px 8px -2px hsl(0 0% 0% / 0.10), 0px 4px 6px -3px hsl(0 0% 0% / 0.10);
+  --shadow-xl: 0px 4px 8px -2px hsl(0 0% 0% / 0.10), 0px 8px 10px -3px hsl(0 0% 0% / 0.10);
+  --shadow-2xl: 0px 4px 8px -2px hsl(0 0% 0% / 0.25);
+  --tracking-normal: 0em;
+  --spacing: 0.25rem;
 }
 
-/*─────────────────────────────────────────────────────────────────*/
-/* 3. DARK MODE OVERRIDES                                           */
-/*─────────────────────────────────────────────────────────────────*/
 .dark {
-  --background:           var(--brand-black);
-  --foreground:           var(--brand-cream);
-
-  --card:                 color-mix(in srgb, var(--brand-black) 85%, var(--brand-cream));
-  --card-foreground:      var(--brand-cream);
-
-  --primary:              var(--brand-red);
-  --primary-foreground:   var(--brand-cream);
-
-  --secondary:            var(--brand-cream);
-  --secondary-foreground: var(--brand-black);
-
-  --border:               color-mix(in srgb, var(--brand-red) 35%, var(--brand-black));
-  --ring:                 var(--brand-red);
+  --background: #0c0c1d;
+  --foreground: #eceff4;
+  --card: #1e1e3f;
+  --card-foreground: #eceff4;
+  --popover: #1e1e3f;
+  --popover-foreground: #eceff4;
+  --primary: #ff00c8;
+  --primary-foreground: #ffffff;
+  --secondary: #1e1e3f;
+  --secondary-foreground: #eceff4;
+  --muted: #1e1e3f;
+  --muted-foreground: #8085a6;
+  --accent: #00ffcc;
+  --accent-foreground: #0c0c1d;
+  --destructive: #ff3d00;
+  --destructive-foreground: #ffffff;
+  --border: #2e2e5e;
+  --input: #2e2e5e;
+  --ring: #ff00c8;
+  --chart-1: #ff00c8;
+  --chart-2: #9000ff;
+  --chart-3: #00e5ff;
+  --chart-4: #00ffcc;
+  --chart-5: #ffe600;
+  --sidebar: #0c0c1d;
+  --sidebar-foreground: #eceff4;
+  --sidebar-primary: #ff00c8;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #00ffcc;
+  --sidebar-accent-foreground: #0c0c1d;
+  --sidebar-border: #2e2e5e;
+  --sidebar-ring: #ff00c8;
+  --font-sans: Outfit, sans-serif;
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: Fira Code, monospace;
+  --radius: 0.5rem;
+  --shadow-2xs: 0px 4px 8px -2px hsl(0 0% 0% / 0.05);
+  --shadow-xs: 0px 4px 8px -2px hsl(0 0% 0% / 0.05);
+  --shadow-sm: 0px 4px 8px -2px hsl(0 0% 0% / 0.10), 0px 1px 2px -3px hsl(0 0% 0% / 0.10);
+  --shadow: 0px 4px 8px -2px hsl(0 0% 0% / 0.10), 0px 1px 2px -3px hsl(0 0% 0% / 0.10);
+  --shadow-md: 0px 4px 8px -2px hsl(0 0% 0% / 0.10), 0px 2px 4px -3px hsl(0 0% 0% / 0.10);
+  --shadow-lg: 0px 4px 8px -2px hsl(0 0% 0% / 0.10), 0px 4px 6px -3px hsl(0 0% 0% / 0.10);
+  --shadow-xl: 0px 4px 8px -2px hsl(0 0% 0% / 0.10), 0px 8px 10px -3px hsl(0 0% 0% / 0.10);
+  --shadow-2xl: 0px 4px 8px -2px hsl(0 0% 0% / 0.25);
 }
 
-/*─────────────────────────────────────────────────────────────────*/
-/* 4. ELEMENT BASE-STYLES                                           */
-/*─────────────────────────────────────────────────────────────────*/
-a {
-  font-weight: 500;
-  color: var(--primary-foreground);
-  text-decoration: inherit;
-}
-a:hover {
-  color: var(--primary);
-}
-
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 450px;
-  min-height: 100vh;
-  background-color: var(--background);
-  color: var(--foreground);
-}
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-button {
-  border-radius: 9999px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 600;
-  font-family: inherit;
-  background-color: var(--primary);
-  color: var(--primary-foreground);
-  cursor: pointer;
-  transition: box-shadow 0.25s, border-color 0.25s;
-}
-button:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  border-color: var(--secondary);
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-/*─────────────────────────────────────────────────────────────────*/
-/* 5. LAYOUT & COMPONENTS                                           */
-/*─────────────────────────────────────────────────────────────────*/
-.card {
-  padding: 2em;
-  background-color: var(--card);
-  color: var(--card-foreground);
-  border: 1px solid var(--border);
-  border-radius: var(--radius, 1.3rem);
-}
-
-#app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
-}
-
-/*─────────────────────────────────────────────────────────────────*/
-/* 6. PREFERS-COLOR-SCHEME LIGHT ADJUSTMENTS                       */
-/*─────────────────────────────────────────────────────────────────*/
-@media (prefers-color-scheme: light) {
-  :root {
-    --background: #ffffff;
-    --foreground: #213547;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-    color: #213547;
-  }
-}
-
-/*─────────────────────────────────────────────────────────────────*/
-/* 7. THEME LAYER FOR TAILWIND-UI                                  */
-/*─────────────────────────────────────────────────────────────────*/
 @theme inline {
-  --radius-sm: calc(var(--radius,1.3rem) - 4px);
-  --radius-md: calc(var(--radius,1.3rem) - 2px);
-  --radius-lg: var(--radius,1.3rem);
-  --radius-xl: calc(var(--radius,1.3rem) + 4px);
-
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
-  --color-input: var(--input, var(--background));
+  --color-input: var(--input);
   --color-ring: var(--ring);
-}
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
 
-/*─────────────────────────────────────────────────────────────────*/
-/* 8. BASE LAYER UTILITY TWEAKS                                     */
-/*─────────────────────────────────────────────────────────────────*/
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-serif: var(--font-serif);
 
-  /* Primary Button Utility */
-  .btn-primary {
-    @apply inline-flex items-center justify-center rounded-full
-           px-4 py-2 text-base font-semibold
-           bg-primary text-primary-foreground
-           transition-shadow;
-  }
-  .btn-primary:hover {
-    @apply shadow-lg;
-  }
-}
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 
-/*─────────────────────────────────────────────────────────────────*/
-/* 9. OPTIONAL “DELIGHT” ANIMATION                                 */
-/*─────────────────────────────────────────────────────────────────*/
-.animate-cookie {
-  animation: jar-bounce 0.8s ease-out;
-}
-@keyframes jar-bounce {
-  0%, 100% { transform: translateY(0); }
-  40%       { transform: translateY(-6px); }
+  --shadow-2xs: var(--shadow-2xs);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow: var(--shadow);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-2xl: var(--shadow-2xl);
 }

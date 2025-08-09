@@ -4,7 +4,14 @@ import {
     CookieJarState,
     DEFAULT_CJ_SETTINGS,
 } from '@/domains';
-import { createContext, ReactNode, useContext, useReducer } from 'react';
+import { PORT_NAME } from '@/lib';
+import {
+    createContext,
+    ReactNode,
+    useContext,
+    useEffect,
+    useReducer,
+} from 'react';
 
 const CookieJarContext = createContext<CookieJarContextType | null>(null);
 
@@ -26,8 +33,7 @@ const initialState: CookieJarState = {
         ghp: '',
         passPhrase: '',
     },
-    status: 'idle',
-    errorMessage: null,
+    port: null,
 };
 
 function cookieJarReducer(
@@ -46,16 +52,6 @@ function cookieJarReducer(
             return {
                 ...state,
                 secrets: action.payload,
-            };
-        case 'SET_STATUS':
-            return {
-                ...state,
-                status: action.payload,
-            };
-        case 'SET_ERROR_MESSAGE':
-            return {
-                ...state,
-                errorMessage: action.payload,
             };
         case 'SET_GITHUB_PAT':
             return {
@@ -125,6 +121,11 @@ function cookieJarReducer(
                     syncIntervalInMinutes:
                         action.payload ?? state.settings.syncIntervalInMinutes,
                 },
+            };
+        case 'SET_PORT':
+            return {
+                ...state,
+                port: action.payload,
             };
         default:
             return state;

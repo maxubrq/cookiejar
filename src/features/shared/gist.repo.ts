@@ -1,7 +1,18 @@
+export type CreateGistDTO = {
+    description?: string;
+    public?: boolean;
+    files: Record<string, { content: string }>;
+};
+
+export type UpdateGistDTO = {
+    description?: string;
+    public?: boolean;
+    files?: Record<string, { content: string }>;
+};
 export class GistRepo {
     private _ROOT_URL = 'https://api.github.com';
     private static _instance: GistRepo;
-    private constructor() { }
+    private constructor() {}
 
     public static getInstance(): GistRepo {
         if (!GistRepo._instance) {
@@ -10,17 +21,27 @@ export class GistRepo {
         return GistRepo._instance;
     }
 
-    protected async _fetch<T>(url: string, token: string, options?: RequestInit): Promise<T> {
+    protected async _fetch<T>(
+        method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+        url: string,
+        token: string,
+        headers?: Record<string, string>,
+        body?: any,
+    ): Promise<T> {
         const response = await fetch(`${this._ROOT_URL}${url}`, {
-            ...options,
+            method,
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-                ...options?.headers,
+                'Content-Type': 'application/vnd.github+json',
+                Authorization: `Bearer ${token}`,
+                'X-GitHub-Api-Version': '2022-11-28',
+                ...headers,
             },
+            body: JSON.stringify(body),
         });
 
         if (!response.ok) {
+            console.error(`Failed to ${method} ${url}: ${response.statusText}`);
+            console.error('Response:', await response.text());
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
@@ -34,7 +55,7 @@ export class GistRepo {
      * @returns The requested gist data.
      */
     public async getGist(gistId: string, token: string): Promise<any> {
-        return this._fetch(`/gists/${gistId}`, token);
+        return this._fetch('GET', `/gists/${gistId}`, token);
     }
 
     /**
@@ -42,11 +63,18 @@ export class GistRepo {
      * @param token The authentication token.
      * @returns An array of gists.
      */
-    public async createGist(gistData: any, token: string): Promise<any> {
-        return this._fetch('/gists', token, {
-            method: 'POST',
-            body: JSON.stringify(gistData),
-        });
+    public async createGist(
+        token: string,
+        body: CreateGistDTO,
+    ): Promise<string> {
+        const response = await this._fetch<{ id: string }>(
+            'POST',
+            `/gists`,
+            token,
+            {},
+            body,
+        );
+        return response.id; // Return the Gist ID
     }
 
     /**
@@ -56,11 +84,12 @@ export class GistRepo {
      * @param token The authentication token.
      * @returns The updated gist data.
      */
-    public async updateGist(gistId: string, gistData: any, token: string): Promise<any> {
-        return this._fetch(`/gists/${gistId}`, token, {
-            method: 'PATCH',
-            body: JSON.stringify(gistData),
-        });
+    public async updateGist(
+        gistId: string,
+        gistData: UpdateGistDTO,
+        token: string,
+    ): Promise<any> {
+        return this._fetch('PATCH', `/gists/${gistId}`, token, {}, gistData);
     }
 
     /**
@@ -70,9 +99,7 @@ export class GistRepo {
      * @returns The response from the API.
      */
     public async deleteGist(gistId: string, token: string): Promise<any> {
-        return this._fetch(`/gists/${gistId}`, token, {
-            method: 'DELETE',
-        });
+        return this._fetch('DELETE', `/gists/${gistId}`, token);
     }
 
     /**
@@ -81,21 +108,32 @@ export class GistRepo {
      * @param token The authentication token.
      * @returns The latest gist containing the specified file, or null if not found.
      */
-    public async findLatestGistByFilename(filename: string, token: string): Promise<any | null> {
+    public async findLatestGistByFilename(
+        filename: string,
+        token: string,
+    ): Promise<any | null> {
         try {
             const pageSize = 100; // Adjust as needed
             let page = 1;
             let gists: any[] = [];
 
             while (true) {
-                const response = await this._fetch<any[]>(`/gists/public?per_page=${pageSize}&page=${page}`, token);
+                const response = await this._fetch<any[]>(
+                    'GET',
+                    `/gists/public?per_page=${pageSize}&page=${page}`,
+                    token,
+                );
                 if (response.length === 0) break;
 
                 gists = gists.concat(response);
                 page++;
             }
 
-            const sortedByUpdatedAt = gists.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+            const sortedByUpdatedAt = gists.sort(
+                (a, b) =>
+                    new Date(b.updated_at).getTime() -
+                    new Date(a.updated_at).getTime(),
+            );
             gists = sortedByUpdatedAt.slice(0, 10); // Limit to the latest 10 gists
 
             for (const gist of gists) {

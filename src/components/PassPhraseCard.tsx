@@ -5,6 +5,7 @@ import { Card } from './ui/card';
 import { Input } from './ui/input';
 import { LocalStorageRepo } from '@/features/shared';
 import { LOCAL_STORAGE_KEYS } from '@/lib/constants';
+import { Button } from './ui/button';
 
 export default function PassPhraseCard() {
     const { dispatch, state } = useCookieJarContext();
@@ -29,7 +30,7 @@ export default function PassPhraseCard() {
         // This is not secure and should not be used in production code
         await storageRepo.setItem(LOCAL_STORAGE_KEYS.SECRETS, {
             ...state.secrets,
-            passPhrase,
+            passPhrase: btoa(passPhrase), // Encode the passphrase
         });
 
         toast.success('Passphrase saved successfully!');
@@ -57,12 +58,12 @@ export default function PassPhraseCard() {
                 value={passPhrase}
                 onChange={(e) => setPassPhrase(e.target.value)}
             />
-            <button
-                className="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+            <Button
                 onClick={onSavePassPhrase}
+                className='bg-[#000] text-white hover:bg-[#333] mt-4'
             >
                 Save Passphrase
-            </button>
+            </Button>
         </Card>
     );
 }
