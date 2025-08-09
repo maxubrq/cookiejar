@@ -33,8 +33,17 @@ export class CookieRepo {
         cookie: chrome.cookies.Cookie,
     ): Promise<chrome.cookies.Cookie | null> {
         const result = await chrome.cookies.set({
-            ...cookie,
-            url: `https://${cookie.domain}${cookie.path}`,
+            url: cookie.domain ? `https://${cookie.domain}` : '',
+            name: cookie.name,
+            value: cookie.value,
+            domain: cookie.domain,
+            expirationDate: cookie.expirationDate,
+            httpOnly: cookie.httpOnly,
+            secure: cookie.secure,
+            path: cookie.path,
+            partitionKey: cookie.partitionKey,
+            sameSite: cookie.sameSite,
+            storeId: cookie.storeId,
         });
         return result;
     }

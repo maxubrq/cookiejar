@@ -1,4 +1,5 @@
 import { CjSettings, PortCommands, PortMessage } from '@/domains';
+import { PullService } from '@/features/pull';
 import { AppEvent, AppStages, PushService } from '@/features/push';
 import { SettingsService } from '@/features/settings';
 import { PORT_NAME } from '@/lib';
@@ -153,8 +154,10 @@ function startListeningForPort() {
 
         console.info(`Connected to port: ${port.name}`);
         const pushService = new PushService(port);
+        const pullService = PullService.getInstance(port);
         const settingsService = SettingsService.getInstance(port);
         pushService.selfRegister();
+        pullService.selfRegister();
         settingsService.selfRegister();
 
         latestPushService = pushService; // keep current instance for alarms

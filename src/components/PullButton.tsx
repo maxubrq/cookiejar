@@ -1,11 +1,22 @@
+import { useCookieJarContext } from '@/hooks/useAppContext';
 import { Button } from './ui/button';
+import { toast } from 'sonner';
+import { PortCommands, PortMessage } from '@/domains';
 
 export default function PullButton() {
 
+    const { state } = useCookieJarContext();
+
     const handlePull = () => {
-        // Logic to pull cookies
-        console.log('Pulling cookies...');
-        // Dispatch an action or call a function to perform the pull
+        if (!state.port) {
+            toast.error('No connection to the service worker. Please refresh the page or restart the extension.');
+            return;
+        }
+
+        state.port.postMessage({
+            command: PortCommands.PULL,
+            data: {},
+        } as PortMessage);
     };
 
     return (

@@ -1,4 +1,9 @@
 // GistRepo.ts
+import { LocalStorageRepo } from '../shared';
+import { LOCAL_STORAGE_KEYS } from '@/lib';
+import { CjSecrets } from '@/domains';
+
+/** Public DTOs (unchanged signatures) */
 export type CreateGistDTO = {
     description?: string;
     public?: boolean;
@@ -11,6 +16,7 @@ export type UpdateGistDTO = {
     files?: Record<string, { content: string }>;
 };
 
+/** Internal queue types */
 type GistJobOp = 'create' | 'update' | 'delete';
 type GistJob = {
     id: string;                // uuid
@@ -32,30 +38,35 @@ class RateLimitError extends Error {
     }
 }
 
+/** Storage keys & alarm name */
 const GIST_QUEUE_KEY = 'CJ_GIST_QUEUE';
 const GIST_ALARM = 'cookie_jar_gist_retry_alarm';
-const MAX_BACKOFF_MS = 15 * 60 * 1000; // cap 15m
 
-import { LocalStorageRepo } from '../shared';
-import { LOCAL_STORAGE_KEYS } from '@/lib';
-import { CjSecrets } from '@/domains';
+/** Backoff caps */
+const MAX_BACKOFF_MS = 15 * 60 * 1000; // 15m
+const MAX_ATTEMPTS = 10;               // dead-letter after this
+
+/** Optional queue size cap (defensive) */
+const MAX_QUEUE_SIZE = 200;
 
 export class GistRepo {
     private _ROOT_URL = 'https://api.github.com';
     private static _instance: GistRepo;
     private storage = LocalStorageRepo.getInstance();
 
-    // optional notifier, set by PushService to surface events to UI
+    // Optional notifier to bubble events up (wired by PushService)
     private notifier?: (msg: { level: 'info' | 'warn' | 'error', title: string, detail?: string }) => void;
 
     private constructor() {
-        // ensure alarm listener is attached once
+        // Attach a single alarm listener for queued retries
         chrome.alarms.onAlarm.addListener((alarm) => {
             if (alarm.name === GIST_ALARM) {
-                // fire and forget; queue processor handles scheduling next if needed
                 void this.processQueue();
             }
         });
+
+        // Best-effort: kick the queue once on worker start (no-op if empty)
+        void this.processQueue().catch(() => { });
     }
 
     public static getInstance(): GistRepo {
@@ -65,12 +76,14 @@ export class GistRepo {
         return GistRepo._instance;
     }
 
+    /** Let services pass a UI notifier */
     public setNotifier(fn?: (msg: { level: 'info' | 'warn' | 'error', title: string, detail?: string }) => void) {
         this.notifier = fn;
     }
 
-    // ---------------- core fetch with rate-limit detection ----------------
-
+    // --------------------------------------------------------------------------
+    // Core fetch with GitHub rate-limit detection
+    // --------------------------------------------------------------------------
     private async _fetch<T>(
         method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
         url: string,
@@ -95,7 +108,7 @@ export class GistRepo {
             const reset = res.headers.get('X-RateLimit-Reset');
             const retryAfter = res.headers.get('Retry-After');
 
-            // GitHub uses 403 for primary/secondary rate limits; sometimes 429
+            // GitHub uses 403 for primary/secondary limits; sometimes 429
             if ((res.status === 403 || res.status === 429) && (remaining === '0' || retryAfter || reset)) {
                 let resetAtMs = Date.now() + 60_000; // default 60s
                 if (retryAfter) {
@@ -116,8 +129,9 @@ export class GistRepo {
         return res.json() as Promise<T>;
     }
 
-    // ---------------- public API (unchanged signatures) ----------------
-
+    // --------------------------------------------------------------------------
+    // Public API (unchanged signatures)
+    // --------------------------------------------------------------------------
     public async getGist(gistId: string, token: string): Promise<any> {
         return this._fetch('GET', `/gists/${gistId}`, token);
     }
@@ -162,8 +176,9 @@ export class GistRepo {
         }
     }
 
-    // ---------------- queue impl ----------------
-
+    // --------------------------------------------------------------------------
+    // Queue implementation
+    // --------------------------------------------------------------------------
     private notify(level: 'info' | 'warn' | 'error', title: string, detail?: string) {
         try { this.notifier?.({ level, title, detail }); } catch { }
     }
@@ -179,12 +194,19 @@ export class GistRepo {
 
     private async enqueue(job: Omit<GistJob, 'id' | 'createdAt' | 'attempts' | 'nextAttemptAt'>) {
         const list = await this.readQueue();
+
+        // Defensive cap
+        if (list.length >= MAX_QUEUE_SIZE) {
+            this.notify('error', 'Gist queue full', `Max ${MAX_QUEUE_SIZE} pending jobs. Dropping newest.`);
+            return;
+        }
+
         const now = Date.now();
         const newJob: GistJob = {
             id: crypto.randomUUID(),
             createdAt: now,
             attempts: 0,
-            nextAttemptAt: now,  // can be updated by scheduleAt
+            nextAttemptAt: now,  // will be updated by scheduleAt / backoff
             ...job,
         };
         list.push(newJob);
@@ -198,11 +220,12 @@ export class GistRepo {
         await chrome.alarms.create(GIST_ALARM, { when });
     }
 
+    /** Processes ready jobs; re-schedules if remaining exist. Safe to call anytime. */
     public async processQueue(): Promise<void> {
         const list = await this.readQueue();
         if (list.length === 0) return;
 
-        // get token on demand (not stored in queue)
+        // fetch token on demand (never store in queue)
         const secrets = await this.storage.getItem<CjSecrets>(LOCAL_STORAGE_KEYS.SECRETS);
         if (!secrets?.ghp) {
             this.notify('error', 'Missing token for queued Gist jobs');
@@ -211,11 +234,11 @@ export class GistRepo {
         const token = atob(secrets.ghp);
 
         let soonestNext: number | null = null;
-
         const remaining: GistJob[] = [];
+
         for (const job of list) {
+            // not yet time to send
             if (job.nextAttemptAt > Date.now()) {
-                // not yet; keep and track soonest
                 soonestNext = soonestNext === null ? job.nextAttemptAt : Math.min(soonestNext, job.nextAttemptAt);
                 remaining.push(job);
                 continue;
@@ -232,16 +255,22 @@ export class GistRepo {
                 this.notify('info', `Queued Gist ${job.op} sent`);
             } catch (err) {
                 if (err instanceof RateLimitError) {
-                    // backoff to resetAt; also exponential jitter if repeated
+                    // retry at provider reset time + exponential jitter
                     const base = err.resetAtMs;
                     const backoff = Math.min(MAX_BACKOFF_MS, (2 ** job.attempts) * 1000);
                     job.attempts += 1;
+
+                    if (job.attempts >= MAX_ATTEMPTS) {
+                        this.notify('error', `Queued Gist ${job.op} dropped`, 'Exceeded max retry attempts.');
+                        continue; // drop
+                    }
+
                     job.nextAttemptAt = base + Math.floor(Math.random() * backoff);
                     remaining.push(job);
                     soonestNext = soonestNext === null ? job.nextAttemptAt : Math.min(soonestNext, job.nextAttemptAt);
                     continue;
                 } else {
-                    // permanent error → drop and notify
+                    // permanent error — drop job, surface message
                     this.notify('error', `Queued Gist ${job.op} failed`, (err as Error)?.message);
                     // do NOT requeue
                 }
@@ -253,30 +282,50 @@ export class GistRepo {
         if (remaining.length > 0 && soonestNext != null) {
             await this.scheduleAt(soonestNext);
         } else {
-            // clear alarm when empty
             await chrome.alarms.clear(GIST_ALARM);
         }
     }
 
-    // --------------- (optional) utility from your original code ---------------
+    /** Find the latest gist owned by the authenticated user that contains ALL given filenames. */
+    public async findLatestOwnGistByFilenames(
+        filenames: string[],
+        token: string,
+    ): Promise<any | null> {
+        // Fetch first couple pages eagerly; expand if needed
+        const pageSize = 100;
+        const maxPages = 3; // up to 300 gists; tune if your account has more
+        const all: any[] = [];
 
-    public async findLatestGistByFilename(filename: string, token: string): Promise<any | null> {
         try {
-            const pageSize = 100;
-            let page = 1;
-            let gists: any[] = [];
-            while (true) {
-                const response = await this._fetch<any[]>('GET', `/gists/public?per_page=${pageSize}&page=${page}`, token);
-                if (response.length === 0) break;
-                gists = gists.concat(response);
-                page++;
+            for (let page = 1; page <= maxPages; page++) {
+                const list = await this._fetch<any[]>(
+                    'GET',
+                    `/gists?per_page=${pageSize}&page=${page}`,
+                    token,
+                );
+                if (!Array.isArray(list) || list.length === 0) break;
+                all.push(...list);
+                if (list.length < pageSize) break; // last page
             }
-            const sorted = gists.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()).slice(0, 10);
-            for (const gist of sorted) if (gist.files && gist.files[filename]) return gist;
+
+            if (all.length === 0) return null;
+
+            // Sort by updated_at desc
+            all.sort(
+                (a, b) =>
+                    new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+            );
+
+            // Return the first that contains ALL filenames
+            for (const g of all) {
+                const files = g?.files ?? {};
+                const hasAll = filenames.every((f) => !!files[f]);
+                if (hasAll) return g;
+            }
             return null;
-        } catch (error) {
-            console.error('Error finding latest gist by filename:', error);
-            return null;
+        } catch (err) {
+            // If this was a rate-limit, _fetch already converted it to RateLimitError for caller to handle
+            throw err;
         }
     }
 }
