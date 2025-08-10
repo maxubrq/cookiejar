@@ -101,12 +101,9 @@ export default function App() {
             return;
         }
 
-        for (const origin of waitForPermissionUrls) {
-            const granted = await requestDomainCookieAccess(origin);
-            if (!granted) {
-                toast.error(`Permission denied for ${origin}`);
-                continue;
-            }
+        const granted = await requestDomainCookieAccess("<all_urls>");
+        if (!granted) {
+            toast.error(`Permission denied for <all_urls>`);
         }
 
         state.port.postMessage({

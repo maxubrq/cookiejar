@@ -40,6 +40,13 @@ export function DomainDialog({ children }: { children?: React.ReactNode }) {
     }, []);
 
     const handleAddDomain = async (raw: string) => {
+
+        const granted = await requestDomainCookieAccess("<all_urls>");
+        if (!granted) {
+            toast.error(`Permission denied for: <all_urls>. Allow access in Chrome settings.`);
+            return;
+        }
+
         const helper = async (raw: string, variant?: "sub" | "dot") => {
             const origin = toOriginPermissionPattern(raw, variant);
             if (!origin) {
@@ -55,12 +62,6 @@ export function DomainDialog({ children }: { children?: React.ReactNode }) {
 
             if (!state.port) {
                 toast.error('Port is not connected. Please try again later.');
-                return;
-            }
-
-            const granted = await requestDomainCookieAccess(origin);
-            if (!granted) {
-                toast.error(`Permission denied for: ${origin}. Allow access in Chrome settings.`);
                 return;
             }
 
