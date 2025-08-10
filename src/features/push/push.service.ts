@@ -17,9 +17,12 @@ export class PushService {
         protected cryptoService: CryptoService = CryptoService.getInstance(),
     ) {
         this.handlePush = this.handlePush.bind(this);
+        port?.onDisconnect.addListener(() => {
+            this.port = null;
+        });
     }
 
-    public static getInstance(port: chrome.runtime.Port): PushService {
+    public static getInstance(port: chrome.runtime.Port | null): PushService {
         if (!PushService._instance) {
             PushService._instance = new PushService(port);
         }

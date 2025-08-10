@@ -2,51 +2,46 @@ name: Build Chrome Extension
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+
+permissions:
+  contents: write  # needed for creating releases & assets
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
 
-    - name: Install pnpm
-      run: npm install -g pnpm
+      - name: Install pnpm
+        run: npm i -g pnpm
 
-    - name: Install dependencies
-      run: pnpm install
+      - name: Install deps
+        run: pnpm i --frozen-lockfile
 
-    - name: Build Chrome Extension
-      run: pnpm run build
+      - name: Build
+        run: pnpm run build
 
-    - name: Zip extension
-      run: |
-        # Check if dist directory exists
-        if [ -d "dist" ]; then
-          cd dist
-          zip -r ../cookie_jar.zip .
-        else
-          echo "dist directory does not exist"
-        fi
-    - name: Commit changes
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add cookie_jar.zip
-        git commit -m "Add built extension"
-        git push
+      - name: Zip extension
+        run: |
+          set -euo pipefail
+          test -d dist
+          (cd dist && zip -r ../cookie_jar.zip .)
 
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: cookie_jar.zip
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Create a release on every push to main (use tags in real projects)
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Build ${{ github.run_number }}
+          files: cookie_jar.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
