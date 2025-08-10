@@ -31,10 +31,12 @@ CookieJar is a privacy-focused Chrome extension that lets you pick which domains
 
 ## 🚀 Installation
 
-1. **Download / Clone** this repo.
-2. Go to `chrome://extensions` in Chrome.
-3. Enable **Developer Mode** (top-right).
-4. Click **Load unpacked** and select the project folder.
+1. **Download** `cookie_jar.zip` from the **Release** in this repo.
+2. Extract the zip
+3. Go to `chrome://extensions` in Chrome.
+4. Enable **Developer Mode** (top-right).
+5. Click **Load unpacked** and select the extracted project folder.
+6. Now you can use `CookieJar` like other extensions
 
 ---
 

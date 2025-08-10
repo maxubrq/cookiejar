@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CookieJar — Secure Cookie Sync</title>
+    <meta name="theme-color" content="#d62828" />
+
+    <link rel="icon" type="image/x-icon" href="./favicon.ico" />
+
+    <!-- PicoCSS -->
+    <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@1.5.10/css/pico.min.css" />
+
+    <!-- Poster fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@700&family=Inter:wght@400;600;800&display=swap"
+        rel="stylesheet">
+
+    <style>
+        :root {
+            --cj-red: #d62828;
+            --cj-white: #ffffff;
+            --cj-black: #000000;
+            --grid-size: 110px;
+            /* density of the poster grid */
+        }
+
+        /* Base */
+        html,
+        body {
+            height: 100%
+        }
+
+        body {
+            margin: 0;
+            background: var(--cj-red);
+            color: var(--cj-white);
+            font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+            overflow-x: hidden;
+        }
+
+        main {
+            isolation: isolate
+        }
+
+        a[role="button"] {
+            text-transform: uppercase;
+            font-weight: 800;
+            letter-spacing: .04em;
+            border-radius: 0;
+            padding: .9rem 1.35rem
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto
+        }
+
+        /* ===== Poster Hero ===== */
+        .poster {
+            position: relative;
+            min-height: 100vh;
+            display: grid;
+            grid-template-columns: minmax(1rem, 1fr) minmax(0, 1100px) minmax(1rem, 1fr);
+            align-items: center;
+            padding-block: min(10vh, 6rem);
+        }
+
+        /* grid overlay with dots */
+        .poster__grid {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(to bottom, rgba(255, 255, 255, .17) 1px, transparent 1px),
+                linear-gradient(to right, rgba(255, 255, 255, .17) 1px, transparent 1px),
+                radial-gradient(circle, rgba(255, 255, 255, .95) 1.6px, transparent 1.7px);
+            background-size: var(--grid-size) var(--grid-size),
+                var(--grid-size) var(--grid-size),
+                var(--grid-size) var(--grid-size);
+            opacity: .75;
+        }
+
+        /* giant “sculpture” logo */
+        .poster__bg {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            display: grid;
+            place-items: center;
+            pointer-events: none;
+        }
+
+        .poster__bg img {
+            width: min(76vmin, 900px);
+            filter: grayscale(1) contrast(1.2) brightness(0.6);
+            opacity: .22;
+            transform: translateY(0);
+            transition: transform .8s ease;
+            mix-blend-mode: multiply;
+        }
+
+        .poster__content {
+            grid-column: 2;
+            z-index: 2;
+            display: grid;
+            gap: 1.2rem
+        }
+
+        .meta {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            font-weight: 800;
+            letter-spacing: .08em
+        }
+
+        .meta span {
+            background: var(--cj-white);
+            color: var(--cj-red);
+            padding: .35rem .5rem
+        }
+
+        .title {
+            font-family: 'Oswald', sans-serif;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: -.01em;
+            line-height: .94;
+            font-size: clamp(2.6rem, 8vw, 6.2rem);
+            margin: .5rem 0 .2rem;
+        }
+
+        .title .break {
+            display: block
+        }
+
+        .sub {
+            max-width: 56ch;
+            font-size: clamp(1.05rem, 2.3vw, 1.35rem);
+            font-weight: 600
+        }
+
+        .cta {
+            display: flex;
+            gap: .9rem;
+            flex-wrap: wrap
+        }
+
+        .cta .light {
+            background: var(--cj-white);
+            color: var(--cj-red);
+            border: 2px solid var(--cj-white)
+        }
+
+        .cta .dark {
+            background: var(--cj-black);
+            color: var(--cj-white);
+            border: 2px solid var(--cj-black)
+        }
+
+        .cta a:hover {
+            transform: translateY(-3px) scale(1.03);
+            transition: .2s ease
+        }
+
+        /* Vertical rail */
+        .rail {
+            position: fixed;
+            right: .75rem;
+            top: 0;
+            height: 100vh;
+            z-index: 3;
+            display: grid;
+            place-items: center;
+            opacity: .65
+        }
+
+        .rail__text {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            font-weight: 800;
+            letter-spacing: .15em;
+            background: var(--cj-white);
+            color: var(--cj-red);
+            padding: .75rem .35rem
+        }
+
+        /* ===== Content Blocks ===== */
+        .block {
+            position: relative;
+            padding: 6rem 1.25rem
+        }
+
+        .block.white {
+            background: var(--cj-white);
+            color: var(--cj-black)
+        }
+
+        .block.black {
+            background: var(--cj-black);
+            color: var(--cj-white)
+        }
+
+        .block.clip-top {
+            clip-path: polygon(0 0, 100% 4%, 100% 100%, 0 100%)
+        }
+
+        .block.clip-bot {
+            clip-path: polygon(0 0, 100% 0, 100% 96%, 0 100%)
+        }
+
+        .block h2 {
+            font-family: 'Oswald', sans-serif;
+            font-size: clamp(2rem, 5vw, 3.2rem);
+            margin: 0 0 1.5rem
+        }
+
+        .block p.lead {
+            font-weight: 600;
+            font-size: 1.15rem;
+            max-width: 70ch
+        }
+
+        /* Grid lists */
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 1rem
+        }
+
+        .card {
+            border: none;
+            border-radius: 0;
+            padding: 1.4rem;
+            min-height: 130px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            box-shadow: 0 12px 0 rgba(0, 0, 0, .25)
+        }
+
+        .card span {
+            font-weight: 800;
+            font-size: 1.15rem
+        }
+
+        .card.white {
+            background: var(--cj-white);
+            color: var(--cj-black);
+            border: 2px solid var(--cj-black);
+            box-shadow: 0 12px 0 rgba(0, 0, 0, .15)
+        }
+
+        .card.black {
+            background: var(--cj-black);
+            color: var(--cj-white)
+        }
+
+        .num {
+            font-family: 'Oswald', sans-serif;
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: .5rem
+        }
+
+        /* Lists */
+        ul.clean {
+            list-style: none;
+            padding: 0;
+            margin: 0
+        }
+
+        ul.clean li {
+            margin: .6rem 0;
+            font-weight: 600
+        }
+
+        /* Footer */
+        footer {
+            background: var(--cj-black);
+            color: var(--cj-white);
+            text-align: center;
+            padding: 1.6rem 1rem;
+            font-size: .95rem
+        }
+
+        /* Motion */
+        .parallax {
+            will-change: transform;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .cards {
+                grid-template-columns: repeat(2, minmax(0, 1fr))
+            }
+        }
+
+        @media (max-width: 720px) {
+            :root {
+                --grid-size: 90px;
+            }
+
+            .cards {
+                grid-template-columns: 1fr
+            }
+
+            .rail {
+                display: none
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Vertical rail (poster detail) -->
+    <aside class="rail" aria-hidden="true">
+        <div class="rail__text">PRIVATE • ENCRYPTED • GIST-POWERED</div>
+    </aside>
+
+    <!-- HERO POSTER -->
+    <header class="poster">
+        <div class="poster__grid" aria-hidden="true"></div>
+        <div class="poster__bg parallax" aria-hidden="true">
+            <img src="./logo.png" alt="">
+        </div>
+
+        <section class="poster__content container">
+            <div class="meta">
+                <span>COOKIEJAR</span><span>CHROME EXTENSION</span><span>RED • WHITE • BLACK</span>
+            </div>
+
+            <h1 class="title">
+                <span class="break">Secure Cookie Sync</span>
+                <span class="break">that keeps <em
+                        style="font-style:normal;background:#000;color:#fff;padding:0 .3rem">you</em> in control.</span>
+            </h1>
+
+            <p class="sub">
+                Pick domains. Encrypt locally. Sync via your private GitHub Gist.
+                No servers. No trackers. Cross-device convenience with end-to-end encryption.
+            </p>
+
+            <nav class="cta" aria-label="Primary">
+                <!-- ⬇ Replace yourusername/repo links -->
+                <a role="button" class="light" href="https://github.com/maxubrq/cookiejar/releases">⬇ Download</a>
+                <a role="button" class="dark" href="https://github.com/maxubrq/cookiejar">View on GitHub</a>
+            </nav>
+        </section>
+    </header>
+
+    <!-- HOW IT WORKS -->
+    <section class="block white clip-top">
+        <div class="container">
+            <h2>How it works</h2>
+            <p class="lead">CookieJar uses your GitHub Gist as an encrypted vault. Cookies never leave your device
+                unencrypted.</p>
+
+            <div class="cards" style="margin-top:1.25rem">
+                <article class="card white">
+                    <div class="num">01</div>
+                    <span>Choose domains</span>
+                    <p>Tell CookieJar exactly which sites to sync. No more, no less.</p>
+                </article>
+
+                <article class="card black">
+                    <div class="num">02</div>
+                    <span>Encrypt locally</span>
+                    <p>Data is encrypted on-device using AES-256-GCM with a key derived from your passphrase
+                        (PBKDF2/Argon2).</p>
+                </article>
+
+                <article class="card white">
+                    <div class="num">03</div>
+                    <span>Push / Pull via Gist</span>
+                    <p>Encrypted blobs are stored in your private GitHub Gist with your PAT (gist scope). Pull &amp;
+                        decrypt on any device.</p>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section class="block black">
+        <div class="container">
+            <h2>Features</h2>
+            <div class="cards" style="margin-top:1.25rem">
+                <article class="card black"><span>Cross-browser sync (Chrome now; others soon)</span></article>
+                <article class="card white"><span>End-to-end encryption with AES-256-GCM</span></article>
+                <article class="card white"><span>Domain-level selection (fine-grained control)</span></article>
+                <article class="card black"><span>Zero backend — your private GitHub Gist only</span></article>
+                <article class="card white"><span>Your PAT + your passphrase = your control</span></article>
+                <article class="card black"><span>Auto sync on change + periodic sync (default 15 min)</span>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECURITY -->
+    <section class="block white">
+        <div class="container">
+            <h2>Security model</h2>
+            <div class="grid">
+                <div>
+                    <ul class="clean">
+                        <li>• <strong>Encryption:</strong> AES-256-GCM (authenticated encryption).</li>
+                        <li>• <strong>Key derivation:</strong> PBKDF2/Argon2 from your passphrase with salt.</li>
+                        <li>• <strong>IV/nonce:</strong> unique per sync blob.</li>
+                        <li>• <strong>Storage:</strong> only encrypted data is saved to your private Gist.</li>
+                        <li>• <strong>Passphrase:</strong> never leaves your device, never stored.</li>
+                        <li>• <strong>PAT:</strong> gist scope only; you can revoke it anytime in GitHub.</li>
+                    </ul>
+                </div>
+                <div>
+                    <ul class="clean">
+                        <li>• <strong>Trust model:</strong> GitHub sees ciphertext only.</li>
+                        <li>• <strong>Device limits:</strong> some sites bind sessions to device/IP; those may not
+                            transfer.</li>
+                        <li>• <strong>Loss of passphrase:</strong> data can’t be recovered — reset and re-sync.</li>
+                        <li>• <strong>Telemetry:</strong> none by default; no trackers.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SETUP -->
+    <section class="block black clip-bot">
+        <div class="container">
+            <h2>Quick setup</h2>
+            <ol>
+                <li><strong>Create a GitHub Personal Access Token</strong> with <code>gist</code> scope.</li>
+                <li><strong>Choose a strong passphrase</strong> — used to derive your encryption key.</li>
+                <li><strong>Open CookieJar</strong> → paste PAT, set passphrase, select domains.</li>
+                <li><strong>Sync</strong> — Push from device A, Pull on device B. Done.</li>
+            </ol>
+            <p style="margin-top:1rem">Tip: keep the same passphrase on every device you sync with.</p>
+            <nav class="cta" style="margin-top:1.2rem">
+                <a role="button" class="light" href="https://github.com/maxubrq/cookiejar/releases">⬇ Download</a>
+                <a role="button" class="dark" href="https://github.com/maxubrq/cookiejar">Source on GitHub</a>
+            </nav>
+        </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="block white">
+        <div class="container">
+            <h2>FAQ</h2>
+            <details open>
+                <summary><strong>Where are my cookies stored?</strong></summary>
+                <p>As encrypted blobs inside your private GitHub Gist. No plaintext cookies are stored by CookieJar.</p>
+            </details>
+            <details>
+                <summary><strong>Can GitHub read my cookies?</strong></summary>
+                <p>No. Cookies are encrypted locally before upload. Without your passphrase, the data is useless.</p>
+            </details>
+            <details>
+                <summary><strong>What permissions does the extension need?</strong></summary>
+                <p>Minimal permissions to read/write cookies for the domains you select, store settings locally, and
+                    schedule periodic syncs.</p>
+            </details>
+            <details>
+                <summary><strong>Does this work for every site?</strong></summary>
+                <p>Most sites work. Some services bind sessions to device/IP or add integrity checks; those might
+                    require re-login.</p>
+            </details>
+            <details>
+                <summary><strong>What if I lose my passphrase?</strong></summary>
+                <p>It cannot be recovered. Revoke your PAT, clear the Gist, set a new passphrase, and re-sync from a
+                    logged-in device.</p>
+            </details>
+        </div>
+    </section>
+
+    <footer>
+        MIT License — © 2025 CookieJar • Built with ❤️ for privacy
+    </footer>
+
+    <script>
+        // subtle parallax for the big logo
+        const bg = document.querySelector('.poster__bg img');
+        const onScroll = () => {
+            const y = (window.scrollY || 0) * 0.06;
+            bg.style.transform = `translateY(${y}px)`;
+        };
+        window.addEventListener('scroll', onScroll, { passive: true });
+        onScroll();
+    </script>
+</body>
+
+</html>
