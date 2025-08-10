@@ -1,4 +1,9 @@
+import { CjSettings, PortCommands } from '@/domains';
+import { LocalStorageRepo } from '@/features/shared';
 import { useCookieJarContext } from '@/hooks/useAppContext';
+import { LOCAL_STORAGE_KEYS } from '@/lib';
+import { AnimatePresence, motion } from 'motion/react';
+import { useEffect } from 'react';
 import { toast } from 'sonner';
 import {
     Dialog,
@@ -10,12 +15,6 @@ import {
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Switch } from './ui/switch';
-import { CjSettings, PortCommands } from '@/domains';
-import { useEffect, useState } from 'react';
-import { LocalStorageRepo } from '@/features/shared';
-import { LOCAL_STORAGE_KEYS } from '@/lib';
-import { AnimatePresence } from 'motion/react';
-import { motion } from 'motion/react';
 
 export default function SettingsDialog({
     children,

@@ -1,8 +1,7 @@
 import {
     CookieJarAction,
     CookieJarContextType,
-    CookieJarState,
-    DEFAULT_CJ_SETTINGS,
+    CookieJarState
 } from '@/domains';
 import {
     createContext,
