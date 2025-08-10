@@ -1,7 +1,7 @@
 import { CjSecrets, CjSettings, PortCommands, PortMessage } from '@/domains';
 import { FILE_NAMES, LOCAL_STORAGE_KEYS } from '@/lib';
 import { AppEvent, AppStages } from '../push';
-import { LocalStorageRepo, toOriginPermissionPattern } from '../shared';
+import { LocalStorageRepo } from '../shared';
 import { CookieRepo } from '../shared/cookie.repo';
 import { CryptoService } from '../shared/crypto.service';
 import { GistRepo } from '../shared/gist.repo';
@@ -41,52 +41,67 @@ export class PullService {
             if (message.command === PortCommands.PULL) {
                 await this.handlePull(message.payload);
             } else if (message.command === PortCommands.APPLY_COOKIES) {
-                await this.handleApplyCookies(message.payload as chrome.cookies.Cookie[]);
+                await this.handleApplyCookies(
+                    message.payload?.cookies || [] as chrome.cookies.Cookie[],
+                    message.payload?.origins || [] as string[],
+                );
             }
         });
     }
 
     protected sleep(ms: number) {
-        return new Promise(resolve => setTimeout(resolve, ms));
+        return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
-    private async handleApplyCookies(cookies: chrome.cookies.Cookie[]) {
+    private async handleApplyCookies(cookies: chrome.cookies.Cookie[], origins: string[]) {
         if (!cookies.length) {
             return;
         }
 
         let appliedCookies: chrome.cookies.Cookie[] = [];
         let failedCookies: chrome.cookies.Cookie[] = [];
+        await this.emitEvent(
+            AppStages.PULL_APPLYING,
+            `Applying ${cookies.length} cookies`,
+        );
         for (const c of cookies) {
             try {
                 await this.cookieRepo.setCookie(c);
-                this.emitEvent(AppStages.APPLY_COOKIE_SUCCESS, 'Cookie applied successfully: ' + c.name);
                 appliedCookies.push(c);
             } catch (e: any) {
                 console.error('Failed to set cookie:', e);
-                this.emitEvent(AppStages.APPLY_COOKIE_FAILED, 'Failed to apply cookie: ' + c.name, undefined, e?.message ?? '');
                 failedCookies.push(c);
             }
             await this.sleep(100); // Throttle to avoid overwhelming the browser
         }
 
-        await this.emitEvent(AppStages.PULL_APPLYING_COMPLETED, `Applied ${appliedCookies.length} cookies successfully: ${appliedCookies.map(c => c.name).join(', ')}`);
+        await this.emitEvent(
+            AppStages.PULL_APPLYING_COMPLETED,
+            `Applied ${appliedCookies.length} cookies successfully: ${appliedCookies.map((c) => c.name).join(', ')}`,
+        );
         if (failedCookies.length) {
-            await this.emitEvent(AppStages.ERROR, `Failed to apply ${failedCookies.length} cookies: ${failedCookies.map(c => c.name).join(', ')}`);
+            await this.emitEvent(
+                AppStages.ERROR,
+                `Failed to apply ${failedCookies.length} cookies: ${failedCookies.map((c) => c.name).join(', ')}`,
+            );
         }
 
         const currentSettings = await this.storageRepo.getItem<CjSettings>(
             LOCAL_STORAGE_KEYS.SETTINGS,
         );
-        await this.storageRepo.setItem<CjSettings>(LOCAL_STORAGE_KEYS.SETTINGS, {
-            ...currentSettings,
-            lastSyncTimestamp: Date.now(),
-            autoSyncEnabled: currentSettings?.autoSyncEnabled ?? true,
-            syncIntervalInMinutes: currentSettings?.syncIntervalInMinutes ?? 15,
-            syncOnChange: currentSettings?.syncOnChange ?? false,
-            syncUrls: currentSettings?.syncUrls ?? [],
-            gistId: currentSettings?.gistId ?? '',
-        });
+        await this.storageRepo.setItem<CjSettings>(
+            LOCAL_STORAGE_KEYS.SETTINGS,
+            {
+                ...currentSettings,
+                lastSyncTimestamp: Date.now(),
+                autoSyncEnabled: currentSettings?.autoSyncEnabled ?? true,
+                syncIntervalInMinutes:
+                    currentSettings?.syncIntervalInMinutes ?? 15,
+                syncOnChange: currentSettings?.syncOnChange ?? false,
+                syncUrls: Array.from(new Set([...currentSettings?.syncUrls ?? [], ...origins])),
+                gistId: currentSettings?.gistId ?? '',
+            },
+        );
     }
 
     private formatDuration(ms: number): string {
@@ -130,12 +145,12 @@ export class PullService {
     public async handlePull(_: any) {
         try {
             console.info('Handling pull request...');
-            await this.port.postMessage(<AppEvent>{
+            await this.port.postMessage((<AppEvent>{
                 stage: AppStages.PULL_WAIT_FOR_PERMISSION,
                 message: 'Waiting for permission to access cookies',
                 cookies: [],
                 urls: [],
-            } as AppEvent);
+            }) as AppEvent);
             await this.emitEvent(AppStages.INITIAL, 'Starting pull process', 0);
 
             // ---- Load settings & secrets ---- //
@@ -160,7 +175,11 @@ export class PullService {
             const passPhrase = atob(secrets.passPhrase);
 
             // ---- Resolve gistId (fresh install supported) ---- //
-            await this.emitEvent(AppStages.PULL_DOWNLOADING, 'Resolving Gist source', 10);
+            await this.emitEvent(
+                AppStages.PULL_DOWNLOADING,
+                'Resolving Gist source',
+                10,
+            );
             let gistId = currentSettings?.gistId || '';
 
             try {
@@ -193,7 +212,11 @@ export class PullService {
             }
 
             // ---- Fetch from Gist ---- //
-            await this.emitEvent(AppStages.PULL_DOWNLOADING, 'Fetching from GitHub Gist', 25);
+            await this.emitEvent(
+                AppStages.PULL_DOWNLOADING,
+                'Fetching from GitHub Gist',
+                25,
+            );
             let gist: any;
             try {
                 gist = await this.gistRepo.getGist(gistId, ghp);
@@ -224,32 +247,52 @@ export class PullService {
                 return;
             }
 
-            await this.emitEvent(AppStages.PULL_DOWNLOADING_COMPLETED, 'Download completed', 40);
+            await this.emitEvent(
+                AppStages.PULL_DOWNLOADING_COMPLETED,
+                'Download completed',
+                40,
+            );
 
             // ---- Decrypt cookies ---- //
-            await this.emitEvent(AppStages.PULL_DECRYPTING, 'Decrypting cookies', 60);
+            await this.emitEvent(
+                AppStages.PULL_DECRYPTING,
+                'Decrypting cookies',
+                60,
+            );
             let cookies: chrome.cookies.Cookie[] = [];
             let origins: string[] = [];
             try {
-                const { plain: decrypted, origins: decryptedOrigins } = await this.cryptoService.decrypt(
-                    contentFile.content,
-                    passPhrase,
-                );
+                const { plain: decrypted, origins: decryptedOrigins } =
+                    await this.cryptoService.decrypt(
+                        contentFile.content,
+                        passPhrase,
+                    );
                 origins = decryptedOrigins;
-                cookies = Array.isArray(decrypted) ? (decrypted as chrome.cookies.Cookie[]) : [];
+                cookies = Array.isArray(decrypted)
+                    ? (decrypted as chrome.cookies.Cookie[])
+                    : [];
             } catch (e: any) {
                 await this.emitEvent(
                     AppStages.ERROR,
                     'Decryption failed',
                     100,
-                    e?.message ?? 'Could not decrypt cookies. Passphrase may be incorrect.',
+                    e?.message ??
+                    'Could not decrypt cookies. Passphrase may be incorrect.',
                 );
                 return;
             }
-            await this.emitEvent(AppStages.PULL_DECRYPTING_COMPLETED, 'Decryption completed', 70);
+            await this.emitEvent(
+                AppStages.PULL_DECRYPTING_COMPLETED,
+                'Decryption completed',
+                70,
+            );
 
             // ---- Apply cookies ---- //
-            await this.emitEvent(AppStages.PULL_APPLYING, 'Applying cookies', 75);
+            await this.emitEvent(
+                AppStages.PULL_APPLYING,
+                'Applying cookies',
+                75,
+            );
             try {
                 console.info('Applying cookies for origins:', origins);
                 this.port.postMessage(<AppEvent>{
@@ -257,7 +300,7 @@ export class PullService {
                     message: 'Requesting permission to access cookie domains',
                     progress: 80,
                     urls: origins,
-                    cookies: cookies
+                    cookies: cookies,
                 });
                 return;
             } catch (e: any) {
@@ -269,13 +312,18 @@ export class PullService {
                 );
                 return;
             } finally {
-                await this.storageRepo.setItem<CjSettings>(LOCAL_STORAGE_KEYS.SETTINGS, {
-                    autoSyncEnabled: currentSettings?.autoSyncEnabled ?? true,
-                    syncIntervalInMinutes: currentSettings?.syncIntervalInMinutes ?? 15,
-                    syncOnChange: currentSettings?.syncOnChange ?? false,
-                    syncUrls: currentSettings?.syncUrls ?? [],
-                    gistId,
-                });
+                await this.storageRepo.setItem<CjSettings>(
+                    LOCAL_STORAGE_KEYS.SETTINGS,
+                    {
+                        autoSyncEnabled:
+                            currentSettings?.autoSyncEnabled ?? true,
+                        syncIntervalInMinutes:
+                            currentSettings?.syncIntervalInMinutes ?? 15,
+                        syncOnChange: currentSettings?.syncOnChange ?? false,
+                        syncUrls: currentSettings?.syncUrls ?? [],
+                        gistId,
+                    },
+                );
             }
         } catch (error: any) {
             console.error('Error handling pull request:', error);

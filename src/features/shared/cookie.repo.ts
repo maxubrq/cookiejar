@@ -1,7 +1,7 @@
 export class CookieRepo {
     private static _instance: CookieRepo;
 
-    private constructor() { }
+    private constructor() {}
 
     public static getInstance(): CookieRepo {
         if (!CookieRepo._instance) {
@@ -32,8 +32,15 @@ export class CookieRepo {
     public async setCookie(
         cookie: chrome.cookies.Cookie,
     ): Promise<chrome.cookies.Cookie | null> {
-        const domainUrl = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain;
-        const cookieCopy = { ...cookie, url: cookie.domain ? `${cookie.secure ? 'https' : 'http'}://${domainUrl}` : '' };
+        const domainUrl = cookie.domain.startsWith('.')
+            ? cookie.domain.slice(1)
+            : cookie.domain;
+        const cookieCopy = {
+            ...cookie,
+            url: cookie.domain
+                ? `${cookie.secure ? 'https' : 'http'}://${domainUrl}`
+                : '',
+        };
         delete (cookieCopy as any).hostOnly;
         delete (cookieCopy as any).session; // session cookies are not supported by chrome.cookies.set
         try {
@@ -41,8 +48,8 @@ export class CookieRepo {
                 const hostCookie = {
                     ...cookieCopy,
                     path: '/',
-                    secure: true
-                }
+                    secure: true,
+                };
 
                 delete (hostCookie as any).domain; // __Host- cookies must not have a domain
                 const result = await chrome.cookies.set(hostCookie);
@@ -52,7 +59,11 @@ export class CookieRepo {
                 return result;
             }
         } catch (error) {
-            console.error('Error setting cookie:', error, JSON.stringify(cookieCopy));
+            console.error(
+                'Error setting cookie:',
+                error,
+                JSON.stringify(cookieCopy),
+            );
             throw error;
         }
     }
@@ -69,10 +80,11 @@ export class CookieRepo {
             return this.setCookie(cookie);
         });
 
-        return Promise.allSettled(promises).then((results) =>
-            results
-                .filter((result) => result.status === 'fulfilled')
-                .map((result) => result.value) as chrome.cookies.Cookie[],
+        return Promise.allSettled(promises).then(
+            (results) =>
+                results
+                    .filter((result) => result.status === 'fulfilled')
+                    .map((result) => result.value) as chrome.cookies.Cookie[],
         );
     }
 

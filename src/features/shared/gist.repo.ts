@@ -19,11 +19,11 @@ export type UpdateGistDTO = {
 /** Internal queue types */
 type GistJobOp = 'create' | 'update' | 'delete';
 type GistJob = {
-    id: string;                // uuid
+    id: string; // uuid
     op: GistJobOp;
     createdAt: number;
     attempts: number;
-    nextAttemptAt: number;     // ms timestamp
+    nextAttemptAt: number; // ms timestamp
     // payload (no token here!)
     body?: CreateGistDTO | UpdateGistDTO;
     gistId?: string;
@@ -44,7 +44,7 @@ const GIST_ALARM = 'cookie_jar_gist_retry_alarm';
 
 /** Backoff caps */
 const MAX_BACKOFF_MS = 15 * 60 * 1000; // 15m
-const MAX_ATTEMPTS = 10;               // dead-letter after this
+const MAX_ATTEMPTS = 10; // dead-letter after this
 
 /** Optional queue size cap (defensive) */
 const MAX_QUEUE_SIZE = 200;
@@ -55,7 +55,11 @@ export class GistRepo {
     private storage = LocalStorageRepo.getInstance();
 
     // Optional notifier to bubble events up (wired by PushService)
-    private notifier?: (msg: { level: 'info' | 'warn' | 'error', title: string, detail?: string }) => void;
+    private notifier?: (msg: {
+        level: 'info' | 'warn' | 'error';
+        title: string;
+        detail?: string;
+    }) => void;
 
     private constructor() {
         // Attach a single alarm listener for queued retries
@@ -66,7 +70,7 @@ export class GistRepo {
         });
 
         // Best-effort: kick the queue once on worker start (no-op if empty)
-        void this.processQueue().catch(() => { });
+        void this.processQueue().catch(() => {});
     }
 
     public static getInstance(): GistRepo {
@@ -77,7 +81,13 @@ export class GistRepo {
     }
 
     /** Let services pass a UI notifier */
-    public setNotifier(fn?: (msg: { level: 'info' | 'warn' | 'error', title: string, detail?: string }) => void) {
+    public setNotifier(
+        fn?: (msg: {
+            level: 'info' | 'warn' | 'error';
+            title: string;
+            detail?: string;
+        }) => void,
+    ) {
         this.notifier = fn;
     }
 
@@ -109,7 +119,10 @@ export class GistRepo {
             const retryAfter = res.headers.get('Retry-After');
 
             // GitHub uses 403 for primary/secondary limits; sometimes 429
-            if ((res.status === 403 || res.status === 429) && (remaining === '0' || retryAfter || reset)) {
+            if (
+                (res.status === 403 || res.status === 429) &&
+                (remaining === '0' || retryAfter || reset)
+            ) {
                 let resetAtMs = Date.now() + 60_000; // default 60s
                 if (retryAfter) {
                     const ra = parseInt(retryAfter, 10);
@@ -118,10 +131,15 @@ export class GistRepo {
                     const epochSec = parseInt(reset, 10);
                     if (!Number.isNaN(epochSec)) resetAtMs = epochSec * 1000;
                 }
-                throw new RateLimitError(`GitHub rate limit hit (${res.status}).`, resetAtMs);
+                throw new RateLimitError(
+                    `GitHub rate limit hit (${res.status}).`,
+                    resetAtMs,
+                );
             }
 
-            console.error(`Failed to ${method} ${url}: ${res.status} ${res.statusText}`);
+            console.error(
+                `Failed to ${method} ${url}: ${res.status} ${res.statusText}`,
+            );
             if (text) console.error('Response:', text);
             throw new Error(`HTTP error! status: ${res.status}`);
         }
@@ -136,28 +154,55 @@ export class GistRepo {
         return this._fetch('GET', `/gists/${gistId}`, token);
     }
 
-    public async createGist(token: string, body: CreateGistDTO): Promise<string> {
+    public async createGist(
+        token: string,
+        body: CreateGistDTO,
+    ): Promise<string> {
         try {
-            const response = await this._fetch<{ id: string }>('POST', `/gists`, token, {}, body);
+            const response = await this._fetch<{ id: string }>(
+                'POST',
+                `/gists`,
+                token,
+                {},
+                body,
+            );
             return response.id;
         } catch (err) {
             if (err instanceof RateLimitError) {
                 await this.enqueue({ op: 'create', body });
                 await this.scheduleAt(err.resetAtMs);
-                this.notify('warn', 'GitHub rate limit — queued create', `Will retry after ${new Date(err.resetAtMs).toLocaleTimeString()}`);
+                this.notify(
+                    'warn',
+                    'GitHub rate limit — queued create',
+                    `Will retry after ${new Date(err.resetAtMs).toLocaleTimeString()}`,
+                );
             }
             throw err;
         }
     }
 
-    public async updateGist(gistId: string, gistData: UpdateGistDTO, token: string): Promise<any> {
+    public async updateGist(
+        gistId: string,
+        gistData: UpdateGistDTO,
+        token: string,
+    ): Promise<any> {
         try {
-            return await this._fetch('PATCH', `/gists/${gistId}`, token, {}, gistData);
+            return await this._fetch(
+                'PATCH',
+                `/gists/${gistId}`,
+                token,
+                {},
+                gistData,
+            );
         } catch (err) {
             if (err instanceof RateLimitError) {
                 await this.enqueue({ op: 'update', gistId, body: gistData });
                 await this.scheduleAt(err.resetAtMs);
-                this.notify('warn', 'GitHub rate limit — queued update', `Will retry after ${new Date(err.resetAtMs).toLocaleTimeString()}`);
+                this.notify(
+                    'warn',
+                    'GitHub rate limit — queued update',
+                    `Will retry after ${new Date(err.resetAtMs).toLocaleTimeString()}`,
+                );
             }
             throw err;
         }
@@ -170,7 +215,11 @@ export class GistRepo {
             if (err instanceof RateLimitError) {
                 await this.enqueue({ op: 'delete', gistId });
                 await this.scheduleAt(err.resetAtMs);
-                this.notify('warn', 'GitHub rate limit — queued delete', `Will retry after ${new Date(err.resetAtMs).toLocaleTimeString()}`);
+                this.notify(
+                    'warn',
+                    'GitHub rate limit — queued delete',
+                    `Will retry after ${new Date(err.resetAtMs).toLocaleTimeString()}`,
+                );
             }
             throw err;
         }
@@ -179,8 +228,14 @@ export class GistRepo {
     // --------------------------------------------------------------------------
     // Queue implementation
     // --------------------------------------------------------------------------
-    private notify(level: 'info' | 'warn' | 'error', title: string, detail?: string) {
-        try { this.notifier?.({ level, title, detail }); } catch { }
+    private notify(
+        level: 'info' | 'warn' | 'error',
+        title: string,
+        detail?: string,
+    ) {
+        try {
+            this.notifier?.({ level, title, detail });
+        } catch {}
     }
 
     private async readQueue(): Promise<GistJob[]> {
@@ -192,12 +247,18 @@ export class GistRepo {
         await this.storage.setItem(GIST_QUEUE_KEY, list);
     }
 
-    private async enqueue(job: Omit<GistJob, 'id' | 'createdAt' | 'attempts' | 'nextAttemptAt'>) {
+    private async enqueue(
+        job: Omit<GistJob, 'id' | 'createdAt' | 'attempts' | 'nextAttemptAt'>,
+    ) {
         const list = await this.readQueue();
 
         // Defensive cap
         if (list.length >= MAX_QUEUE_SIZE) {
-            this.notify('error', 'Gist queue full', `Max ${MAX_QUEUE_SIZE} pending jobs. Dropping newest.`);
+            this.notify(
+                'error',
+                'Gist queue full',
+                `Max ${MAX_QUEUE_SIZE} pending jobs. Dropping newest.`,
+            );
             return;
         }
 
@@ -206,7 +267,7 @@ export class GistRepo {
             id: crypto.randomUUID(),
             createdAt: now,
             attempts: 0,
-            nextAttemptAt: now,  // will be updated by scheduleAt / backoff
+            nextAttemptAt: now, // will be updated by scheduleAt / backoff
             ...job,
         };
         list.push(newJob);
@@ -226,7 +287,9 @@ export class GistRepo {
         if (list.length === 0) return;
 
         // fetch token on demand (never store in queue)
-        const secrets = await this.storage.getItem<CjSecrets>(LOCAL_STORAGE_KEYS.SECRETS);
+        const secrets = await this.storage.getItem<CjSecrets>(
+            LOCAL_STORAGE_KEYS.SECRETS,
+        );
         if (!secrets?.ghp) {
             this.notify('error', 'Missing token for queued Gist jobs');
             return; // keep queue; user can add token later
@@ -239,16 +302,31 @@ export class GistRepo {
         for (const job of list) {
             // not yet time to send
             if (job.nextAttemptAt > Date.now()) {
-                soonestNext = soonestNext === null ? job.nextAttemptAt : Math.min(soonestNext, job.nextAttemptAt);
+                soonestNext =
+                    soonestNext === null
+                        ? job.nextAttemptAt
+                        : Math.min(soonestNext, job.nextAttemptAt);
                 remaining.push(job);
                 continue;
             }
 
             try {
                 if (job.op === 'create') {
-                    await this._fetch('POST', `/gists`, token, {}, job.body as CreateGistDTO);
+                    await this._fetch(
+                        'POST',
+                        `/gists`,
+                        token,
+                        {},
+                        job.body as CreateGistDTO,
+                    );
                 } else if (job.op === 'update') {
-                    await this._fetch('PATCH', `/gists/${job.gistId}`, token, {}, job.body as UpdateGistDTO);
+                    await this._fetch(
+                        'PATCH',
+                        `/gists/${job.gistId}`,
+                        token,
+                        {},
+                        job.body as UpdateGistDTO,
+                    );
                 } else if (job.op === 'delete') {
                     await this._fetch('DELETE', `/gists/${job.gistId}`, token);
                 }
@@ -257,21 +335,36 @@ export class GistRepo {
                 if (err instanceof RateLimitError) {
                     // retry at provider reset time + exponential jitter
                     const base = err.resetAtMs;
-                    const backoff = Math.min(MAX_BACKOFF_MS, (2 ** job.attempts) * 1000);
+                    const backoff = Math.min(
+                        MAX_BACKOFF_MS,
+                        2 ** job.attempts * 1000,
+                    );
                     job.attempts += 1;
 
                     if (job.attempts >= MAX_ATTEMPTS) {
-                        this.notify('error', `Queued Gist ${job.op} dropped`, 'Exceeded max retry attempts.');
+                        this.notify(
+                            'error',
+                            `Queued Gist ${job.op} dropped`,
+                            'Exceeded max retry attempts.',
+                        );
                         continue; // drop
                     }
 
-                    job.nextAttemptAt = base + Math.floor(Math.random() * backoff);
+                    job.nextAttemptAt =
+                        base + Math.floor(Math.random() * backoff);
                     remaining.push(job);
-                    soonestNext = soonestNext === null ? job.nextAttemptAt : Math.min(soonestNext, job.nextAttemptAt);
+                    soonestNext =
+                        soonestNext === null
+                            ? job.nextAttemptAt
+                            : Math.min(soonestNext, job.nextAttemptAt);
                     continue;
                 } else {
                     // permanent error — drop job, surface message
-                    this.notify('error', `Queued Gist ${job.op} failed`, (err as Error)?.message);
+                    this.notify(
+                        'error',
+                        `Queued Gist ${job.op} failed`,
+                        (err as Error)?.message,
+                    );
                     // do NOT requeue
                 }
             }
@@ -313,7 +406,8 @@ export class GistRepo {
             // Sort by updated_at desc
             all.sort(
                 (a, b) =>
-                    new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+                    new Date(b.updated_at).getTime() -
+                    new Date(a.updated_at).getTime(),
             );
 
             // Return the first that contains ALL filenames

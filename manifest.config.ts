@@ -26,14 +26,11 @@ export default defineManifest({
   },
   permissions: [
     'sidePanel',
-    'contentSettings',
     'storage',
     'cookies',
     'alarms',
   ],
-  optional_host_permissions: [
-    "<all_urls>",
-  ],
+  host_permissions: ["<all_urls>"],
   content_scripts: [{
     js: ['src/content/main.tsx'],
     matches: ['https://*/*'],

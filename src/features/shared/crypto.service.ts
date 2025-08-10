@@ -12,7 +12,7 @@ export class CryptoService {
     private _PBKDF_IV_LENGTH = 12; // 12 bytes for AES-GCM (GCM Standard)
     private static _instance: CryptoService;
 
-    private constructor() { }
+    private constructor() {}
 
     public static getInstance(): CryptoService {
         if (!CryptoService._instance) {
@@ -56,7 +56,11 @@ export class CryptoService {
         return { aesKey, salt: new Uint8Array(salt).slice().buffer };
     }
 
-    public async encrypt(plain: any, origins: string[], passPhrase: string): Promise<string> {
+    public async encrypt(
+        plain: any,
+        origins: string[],
+        passPhrase: string,
+    ): Promise<string> {
         const { aesKey, salt } = await this.deriveKey(passPhrase);
         const iv = crypto.getRandomValues(
             new Uint8Array(this._PBKDF_IV_LENGTH),

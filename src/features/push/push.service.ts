@@ -98,8 +98,16 @@ export class PushService {
             );
 
             // ---- Encrypting cookies ---- //
-            await this.emitEvent(AppStages.PUSH_ENCRYPTING, 'Encrypting data', 20);
-            const allOrigins = Array.from(new Set(cookies.map((c) => toOriginPermissionPattern(c.domain)))).filter((c) => c !== null);
+            await this.emitEvent(
+                AppStages.PUSH_ENCRYPTING,
+                'Encrypting data',
+                20,
+            );
+            const allOrigins = Array.from(
+                new Set(
+                    cookies.map((c) => toOriginPermissionPattern(c.domain)),
+                ),
+            ).filter((c) => c !== null);
             const encryptedResult = await this.cryptoService.encrypt(
                 cookies,
                 allOrigins,
@@ -130,7 +138,9 @@ export class PushService {
                         description: 'CookieJar - Encrypted Cookies',
                         public: false,
                         files: {
-                            [FILE_NAMES.CONTENT_FILE]: { content: encryptedResult },
+                            [FILE_NAMES.CONTENT_FILE]: {
+                                content: encryptedResult,
+                            },
                         },
                     });
                     await this.emitEvent(
@@ -141,7 +151,9 @@ export class PushService {
                 } else {
                     const gistData = {
                         files: {
-                            [FILE_NAMES.CONTENT_FILE]: { content: encryptedResult },
+                            [FILE_NAMES.CONTENT_FILE]: {
+                                content: encryptedResult,
+                            },
                         },
                     };
                     await this.gistRepo.updateGist(gistId, gistData, ghp);

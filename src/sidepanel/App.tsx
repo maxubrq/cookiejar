@@ -9,7 +9,7 @@ import StageNotifier from '@/components/StateNotifier';
 import { Button } from '@/components/ui/button';
 import { CjSecrets, CjSettings, DEFAULT_CJ_SETTINGS, PortCommands, PortMessage } from '@/domains';
 import { AppEvent, AppStages } from '@/features/push';
-import { LocalStorageRepo, requestDomainCookieAccess, toOriginPermissionPattern } from '@/features/shared';
+import { LocalStorageRepo, requestDomainCookieAccess } from '@/features/shared';
 import { useCookieJarContext } from '@/hooks/useAppContext';
 import { LOCAL_STORAGE_KEYS, PORT_NAME } from '@/lib/constants';
 import { AnimatePresence, motion } from 'motion/react';
@@ -95,7 +95,10 @@ export default function App() {
 
         state.port.postMessage({
             command: PortCommands.APPLY_COOKIES,
-            payload: [...waitForPermissionCookies],
+            payload: {
+                cookies: [...waitForPermissionCookies],
+                origins: [...waitForPermissionUrls],
+            },
         } as PortMessage);
     };
 

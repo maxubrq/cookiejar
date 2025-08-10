@@ -1,6 +1,6 @@
-import { PortCommands, PortMessage } from '@/domains';
+import { CjSettings, PortCommands, PortMessage } from '@/domains';
 import { useCookieJarContext } from '@/hooks/useAppContext';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from './ui/button';
 import {
     Dialog,
@@ -11,7 +11,8 @@ import {
 } from './ui/dialog';
 import { Input } from './ui/input';
 import { toast } from 'sonner';
-import { requestDomainCookieAccess, toOriginPermissionPattern } from '@/features/shared';
+import { LocalStorageRepo, requestDomainCookieAccess, toOriginPermissionPattern } from '@/features/shared';
+import { LOCAL_STORAGE_KEYS } from '@/lib';
 
 // --------------------------------------------------------------------------
 
@@ -20,8 +21,21 @@ export function DomainDialog({ children }: { children?: React.ReactNode }) {
     const { settings } = state;
     const urls = settings.syncUrls;
     const [currentDomain, setCurrentDomain] = useState<string>('');
+    const [domains, setDomains] = useState<string[]>([]);
 
     const total = useMemo(() => urls.length, [urls]);
+
+    useEffect(() => {
+        const loadUrls = async (url: string) => {
+            const localStorage = LocalStorageRepo.getInstance();
+            const settings = await localStorage.getItem<CjSettings>(LOCAL_STORAGE_KEYS.SETTINGS);
+            if (settings && settings.syncUrls.includes(url)) {
+                setDomains((prev) => [...prev, url]);
+            }
+        };
+
+        urls.forEach(loadUrls);
+    }, [urls]);
 
     const handleAddDomain = async (raw: string) => {
         const helper = async (raw: string, variant?: "sub" | "dot") => {
@@ -76,6 +90,8 @@ export function DomainDialog({ children }: { children?: React.ReactNode }) {
         dispatch({ type: 'REMOVE_SYNC_URL', payload: origin });
     };
 
+
+
     return (
         <div className="domain-dialog">
             <Dialog>
@@ -124,11 +140,11 @@ export function DomainDialog({ children }: { children?: React.ReactNode }) {
 
                     {/* DOMAIN LIST */}
                     <div className="w-full rounded-md border border-gray-200">
-                        {urls.length === 0 ? (
+                        {domains.length === 0 ? (
                             <div className="p-3 text-sm text-gray-500">No domains added.</div>
                         ) : (
                             <ul className="divide-y divide-gray-200">
-                                {urls.map((origin) => (
+                                {domains.map((origin) => (
                                     <li
                                         key={origin}
                                         className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-2"
