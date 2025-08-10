@@ -24,7 +24,7 @@ export default function App() {
     const { dispatch } = useCookieJarContext();
     const [waitForPermissionUrls, setWaitForPermissionUrls] = useState<string[]>([]);
     const [waitForPermissionCookies, setWaitForPermissionCookies] = useState<chrome.cookies.Cookie[]>([]);
-    const [latestSyncTimestamp, setLatestSyncTimestamp] = useState<number | undefined>(state.settings.lastSyncTimestamp);
+    const [latestSyncTimestamp, setLatestSyncTimestamp] = useState<number | undefined>(state.settings?.lastSyncTimestamp);
 
     const fetchSecrets = async () => {
         const localeStorage = LocalStorageRepo.getInstance();
@@ -46,7 +46,7 @@ export default function App() {
         }
     };
 
-    useEffect(()=>{
+    useEffect(() => {
         const loadLatestSyncTimestamp = async () => {
             const localeStorage = LocalStorageRepo.getInstance();
             const settings = await localeStorage.getItem<CjSettings>(LOCAL_STORAGE_KEYS.SETTINGS);
@@ -170,7 +170,7 @@ export default function App() {
 
             {/* IF Github PAT is not set, show a message */}
             <AnimatePresence>
-                {!secrets.ghp && (
+                {!secrets?.ghp && (
                     <motion.div
                         initial={{ opacity: 0, y: -20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -185,7 +185,7 @@ export default function App() {
 
             {/* IF Passphrase is not set, show a message */}
             <AnimatePresence>
-                {!secrets.passPhrase && secrets.ghp && (
+                {!secrets?.passPhrase && secrets?.ghp && (
                     <motion.div
                         initial={{ opacity: 0, y: -20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -200,7 +200,7 @@ export default function App() {
 
             {/* Sync & Pull Manual buttons */}
             <AnimatePresence>
-                {secrets.ghp && secrets.passPhrase && (
+                {secrets?.ghp && secrets?.passPhrase && (
                     <motion.div
                         className='flex flex-col items-center justify-center p-4'
                     >

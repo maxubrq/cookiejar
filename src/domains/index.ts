@@ -11,14 +11,14 @@ export type CjSecrets = {
      *
      * @see: [(Github) Managing your personal access tokens](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
      */
-    ghp: string;
+    ghp?: string;
     /**
      * Passphrase used for encrypting and decrypting sensitive data.
      * This passphrase should be strong and kept secret to ensure the security of the encrypted data
      *
      * **NOTE**: If you lose this passphrase, you will not be able to decrypt your data.
      */
-    passPhrase: string; // Passphrase for encryption
+    passPhrase?: string; // Passphrase for encryption
 };
 
 /**
@@ -39,13 +39,13 @@ export type CjSettings = {
      * If true, the extension will automatically sync cookies at regular intervals or when changes are detected.
      * If false, the user will need to manually trigger the sync process.
      */
-    autoSyncEnabled: boolean;
+    autoSyncEnabled?: boolean;
     /**
      * The interval in minutes for syncing cookies.
      * This setting is only used if auto-sync is enabled.
      * Default value is 15 minutes.
      */
-    syncIntervalInMinutes: number;
+    syncIntervalInMinutes?: number;
     /**
      * Whether to sync cookies on change.
      * If true, the extension will sync cookies whenever a change is detected.
@@ -53,7 +53,7 @@ export type CjSettings = {
      *
      * **NOTE**: This setting **ONLY** applies if `autoSyncEnabled` is true.
      */
-    syncOnChange: boolean;
+    syncOnChange?: boolean;
 
     // --- Domain settings ---
     /**
@@ -61,7 +61,7 @@ export type CjSettings = {
      * This setting is used to specify which domains the extension should sync cookies for.
      * If empty, the extension will not sync any cookies.
      */
-    syncUrls: string[];
+    syncUrls?: string[];
 
     /**
      * Timestamp of the last successful sync.
@@ -84,12 +84,12 @@ export type CookieJarState = {
      * The current settings for the CookieJar extension.
      * This includes user preferences and configurations for syncing cookies.
      */
-    settings: CjSettings;
+    settings: CjSettings | null;
     /**
      * The current secrets for the CookieJar extension.
      * This includes sensitive information such as GitHub Personal Access Tokens and encryption passphrases.
      */
-    secrets: CjSecrets;
+    secrets: CjSecrets | null;
     /**
      * The current status of the CookieJar extension.
      * This can be 'idle', 'syncing', or 'error'.

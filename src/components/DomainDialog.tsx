@@ -14,29 +14,30 @@ import { toast } from 'sonner';
 import { LocalStorageRepo, requestDomainCookieAccess, toOriginPermissionPattern } from '@/features/shared';
 import { LOCAL_STORAGE_KEYS } from '@/lib';
 import { ScrollArea } from './ui/scroll-area';
+import { AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 
 // --------------------------------------------------------------------------
 
 export function DomainDialog({ children }: { children?: React.ReactNode }) {
     const { state, dispatch } = useCookieJarContext();
     const { settings } = state;
-    const urls = settings.syncUrls;
     const [currentDomain, setCurrentDomain] = useState<string>('');
-    const [domains, setDomains] = useState<string[]>([]);
-
-    const total = useMemo(() => urls.length, [urls]);
+    const total = useMemo(() => settings?.syncUrls?.length ?? 0, [settings]);
+    const domains = useMemo(() => settings?.syncUrls ?? [], [settings]);
 
     useEffect(() => {
-        const loadUrls = async (url: string) => {
+        const loadUrls = async () => {
             const localStorage = LocalStorageRepo.getInstance();
             const settings = await localStorage.getItem<CjSettings>(LOCAL_STORAGE_KEYS.SETTINGS);
-            if (settings && settings.syncUrls.includes(url)) {
-                setDomains((prev) => [...prev, url]);
+            if (!settings) {
+                return;
             }
+            dispatch({ type: 'SET_SETTINGS', payload: settings });
         };
 
-        urls.forEach(loadUrls);
-    }, [urls]);
+        loadUrls();
+    }, []);
 
     const handleAddDomain = async (raw: string) => {
         const helper = async (raw: string, variant?: "sub" | "dot") => {
@@ -46,7 +47,7 @@ export function DomainDialog({ children }: { children?: React.ReactNode }) {
                 return;
             }
 
-            if (urls.includes(origin)) {
+            if (domains.includes(origin)) {
                 toast.info('This domain is already in your list.');
                 setCurrentDomain('');
                 return;
@@ -123,6 +124,8 @@ export function DomainDialog({ children }: { children?: React.ReactNode }) {
                             }}
                         />
                         <Button
+                            variant="default"
+                            className='bg-[#333] text-[#fafafa]'
                             onClick={async () => {
                                 if (currentDomain.trim()) {
                                     await handleAddDomain(currentDomain);
@@ -133,40 +136,51 @@ export function DomainDialog({ children }: { children?: React.ReactNode }) {
                         </Button>
                     </div>
 
-                    {/* DOMAIN LIST HEADER */}
-                    <div className="flex items-center justify-between mb-2">
-                        <p className="text-sm text-[#333] font-medium">Allowed domains</p>
-                        <p className="text-xs text-gray-500">{total ? `Total: ${total}` : 'None'}</p>
-                    </div>
+                    <AnimatePresence>
+                        {
+                            domains.length > 0 && <motion.div
+                                initial={{ opacity: 0, y: -20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -20 }}
+                                transition={{ duration: 0.2 }}
+                            >
+                                {/* DOMAIN LIST HEADER */}
+                                <div className="flex items-center justify-between mb-2">
+                                    <p className="text-sm text-[#333] font-medium">Allowed domains</p>
+                                    <p className="text-xs text-gray-500">{total ? `Total: ${total}` : 'None'}</p>
+                                </div>
 
-                    {/* DOMAIN LIST */}
-                    <ScrollArea className='h-[400px] overflow-y-auto'>
-                        <div className="w-full rounded-md border border-gray-200">
-                            {domains.length === 0 ? (
-                                <div className="p-3 text-sm text-gray-500">No domains added.</div>
-                            ) : (
-                                <ul className="divide-y divide-gray-200">
-                                    {domains.map((origin) => (
-                                        <li
-                                            key={origin}
-                                            className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-2"
-                                        >
-                                            <span className="truncate text-[#333]" title={origin}>
-                                                {origin}
-                                            </span>
-                                            <Button
-                                                variant="destructive"
-                                                size="sm"
-                                                onClick={() => handleRemoveDomain(origin)}
-                                            >
-                                                Remove
-                                            </Button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-                    </ScrollArea>
+                                {/* DOMAIN LIST */}
+                                <ScrollArea className='h-[400px] overflow-y-auto'>
+                                    <div className="w-full rounded-md border border-gray-200">
+                                        {domains.length === 0 ? (
+                                            <div className="p-3 text-sm text-gray-500">No domains added.</div>
+                                        ) : (
+                                            <ul className="divide-y divide-gray-200">
+                                                {domains.map((origin) => (
+                                                    <li
+                                                        key={origin}
+                                                        className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-2"
+                                                    >
+                                                        <span className="truncate text-[#333]" title={origin}>
+                                                            {origin}
+                                                        </span>
+                                                        <Button
+                                                            variant="destructive"
+                                                            size="sm"
+                                                            onClick={() => handleRemoveDomain(origin)}
+                                                        >
+                                                            Remove
+                                                        </Button>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </div>
+                                </ScrollArea>
+                            </motion.div>
+                        }
+                    </AnimatePresence>
                 </DialogContent>
             </Dialog>
         </div>

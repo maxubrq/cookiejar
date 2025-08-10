@@ -5,17 +5,20 @@ import { LocalStorageRepo } from '../shared';
 import { CookieRepo } from '../shared/cookie.repo';
 
 export class SettingsService {
-    private static _instance: SettingsService;
     private _settings: CjSettings | null = null;
 
-    private constructor(
-        protected port: chrome.runtime.Port,
+    constructor(
+        protected port: chrome.runtime.Port | null,
         protected storageRepo: LocalStorageRepo = LocalStorageRepo.getInstance(),
         protected cookiesRepo: CookieRepo = CookieRepo.getInstance(),
     ) {
         this.loadSettings = this.loadSettings.bind(this);
         this.updateSettings = this.updateSettings.bind(this);
         this.addSyncUrl = this.addSyncUrl.bind(this);
+
+        this.port?.onDisconnect.addListener(() => {
+            this.port = null;
+        });
     }
 
     public get settings(): CjSettings | null {
@@ -30,15 +33,8 @@ export class SettingsService {
         return settings;
     }
 
-    public static getInstance(port: chrome.runtime.Port): SettingsService {
-        if (!SettingsService._instance) {
-            SettingsService._instance = new SettingsService(port);
-        }
-        return SettingsService._instance;
-    }
-
     public selfRegister(): void {
-        this.port.onMessage.addListener(async (message: PortMessage) => {
+        this.port?.onMessage.addListener(async (message: PortMessage) => {
             if (message.command === PortCommands.SET_SETTINGS) {
                 await this.updateSettings(
                     message.payload as Partial<CjSettings>,
@@ -92,7 +88,7 @@ export class SettingsService {
             LOCAL_STORAGE_KEYS.SETTINGS,
             newCjSettings,
         );
-        this.port.postMessage({
+        this.port?.postMessage({
             command: PortCommands.APPLY_SETTINGS,
             payload: {
                 ...newCjSettings,
@@ -102,55 +98,24 @@ export class SettingsService {
     }
 
     public async removeSyncUrl(url: string): Promise<CjSettings> {
-        if (!this._settings) {
-            await this.loadSettings();
-        }
-        if (!this._settings) {
-            this._settings = {
-                autoSyncEnabled: true,
-                syncUrls: [],
-                syncIntervalInMinutes: 15,
-                syncOnChange: true,
-                gistId: undefined,
-            };
-            await this.storageRepo.setItem(
-                LOCAL_STORAGE_KEYS.SETTINGS,
-                this._settings,
-            );
+        await this.loadSettings();
 
-            return this._settings;
-        }
-        const updatedUrls = this._settings.syncUrls.filter((u) => u !== url);
+        const updatedUrls = this._settings?.syncUrls?.filter((u) => u !== url);
         const result = await this.updateSettings({ syncUrls: updatedUrls });
         const cookiesOfUrl = await this.cookiesRepo.getAllFromDomain(url);
         await this.emitEvent({
             stage: AppStages.SETTINGS_UPDATING_COMPLETED,
             message: `Removed sync URL: ${url} with ${cookiesOfUrl.length} cookies associated.`,
         });
+
         return result;
     }
 
     public async addSyncUrl(url: string): Promise<CjSettings> {
-        if (!this._settings) {
-            await this.loadSettings();
-        }
-        if (!this._settings) {
-            // First time loading settings, initialize with defaults
-            this._settings = {
-                autoSyncEnabled: true,
-                syncUrls: [],
-                syncIntervalInMinutes: 15,
-                syncOnChange: true,
-                gistId: undefined,
-            };
-            await this.storageRepo.setItem(
-                LOCAL_STORAGE_KEYS.SETTINGS,
-                this._settings,
-            );
-        }
+        await this.loadSettings();
 
         const updatedUrls = Array.from(
-            new Set([...this._settings.syncUrls, url]),
+            new Set([...this._settings?.syncUrls ?? [], url]),
         );
         const result = await this.updateSettings({ syncUrls: updatedUrls });
 

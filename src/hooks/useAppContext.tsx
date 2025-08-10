@@ -26,11 +26,8 @@ export function useCookieJarContext(): CookieJarContextType {
 }
 
 const initialState: CookieJarState = {
-    settings: DEFAULT_CJ_SETTINGS,
-    secrets: {
-        ghp: '',
-        passPhrase: '',
-    },
+    settings: null,
+    secrets: null,
     port: null,
 };
 
@@ -73,7 +70,7 @@ function cookieJarReducer(
                 settings: {
                     ...state.settings,
                     autoSyncEnabled:
-                        action.payload ?? !state.settings.autoSyncEnabled,
+                        action.payload ?? !state.settings?.autoSyncEnabled,
                 },
             };
         case 'TOGGLE_SYNC_ON_CHANGE':
@@ -82,7 +79,7 @@ function cookieJarReducer(
                 settings: {
                     ...state.settings,
                     syncOnChange:
-                        action.payload ?? !state.settings.syncOnChange,
+                        action.payload ?? !state.settings?.syncOnChange,
                 },
             };
         case 'ADD_SYNC_URL':
@@ -90,7 +87,7 @@ function cookieJarReducer(
                 ...state,
                 settings: {
                     ...state.settings,
-                    syncUrls: [...state.settings.syncUrls, action.payload],
+                    syncUrls: [...state.settings?.syncUrls ?? [], action.payload],
                 },
             };
         case 'REMOVE_SYNC_URL':
@@ -98,9 +95,9 @@ function cookieJarReducer(
                 ...state,
                 settings: {
                     ...state.settings,
-                    syncUrls: state.settings.syncUrls.filter(
+                    syncUrls: state.settings?.syncUrls?.filter(
                         (url) => url !== action.payload,
-                    ),
+                    ) ?? [],
                 },
             };
         case 'SET_SYNC_URLS':
@@ -117,7 +114,7 @@ function cookieJarReducer(
                 settings: {
                     ...state.settings,
                     syncIntervalInMinutes:
-                        action.payload ?? state.settings.syncIntervalInMinutes,
+                        action.payload ?? state.settings?.syncIntervalInMinutes ?? 15,
                 },
             };
         case 'SET_PORT':

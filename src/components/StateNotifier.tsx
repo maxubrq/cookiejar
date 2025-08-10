@@ -1,10 +1,12 @@
 import { AppEvent, AppStages } from '@/features/push';
 import { useCookieJarContext } from '@/hooks/useAppContext';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 
 export default function StageNotifier() {
-    const { state, dispatch } = useCookieJarContext();
+    const { state } = useCookieJarContext();
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastEventRef = useRef<AppEvent | null>(null);
 
     const toastInfo = (message: string) => {
         toast.info(message, {
@@ -17,9 +19,7 @@ export default function StageNotifier() {
             icon: 'ℹ️',
             action: {
                 label: 'Dismiss',
-                onClick: () => {
-                    toast.dismiss();
-                },
+                onClick: () => toast.dismiss(),
             },
         });
     };
@@ -35,12 +35,11 @@ export default function StageNotifier() {
             icon: '✅',
             action: {
                 label: 'Dismiss',
-                onClick: () => {
-                    toast.dismiss();
-                },
+                onClick: () => toast.dismiss(),
             },
         });
     };
+
     const toastError = (message: string, error?: string) => {
         toast.error(`${message}${error ? `: ${error}` : ''}`, {
             duration: 5000,
@@ -52,9 +51,7 @@ export default function StageNotifier() {
             icon: '❌',
             action: {
                 label: 'Dismiss',
-                onClick: () => {
-                    toast.dismiss();
-                },
+                onClick: () => toast.dismiss(),
             },
         });
     };
@@ -67,82 +64,36 @@ export default function StageNotifier() {
                 toastError(message, error);
                 break;
             case AppStages.PUSH_DUMPING:
+            case AppStages.PUSH_ENCRYPTING:
+            case AppStages.PUSH_SENDING:
+            case AppStages.PULL_DOWNLOADING:
+            case AppStages.PULL_DECRYPTING:
+            case AppStages.PULL_APPLYING:
+            case AppStages.SETTINGS_LOADING:
+            case AppStages.SETTINGS_UPDATING:
+            case AppStages.APPLY_AUTO_SYNC_INTERVAL:
+            case AppStages.APPLY_SYNC_ON_CHANGE:
+            case AppStages.SET_SECRETS:
                 toastInfo(message);
                 break;
             case AppStages.PUSH_DUMPING_COMPLETED:
-                toastSuccess(message);
-                break;
-            case AppStages.PUSH_ENCRYPTING:
-                toastInfo(message);
-                break;
             case AppStages.PUSH_ENCRYPTING_COMPLETED:
-                toastSuccess(message);
-                break;
-            case AppStages.PUSH_SENDING:
-                toastInfo(message);
-                break;
             case AppStages.PUSH_SENDING_COMPLETED:
-                toastSuccess(message);
-                break;
             case AppStages.PUSH_COMPLETED:
-                toastSuccess(message);
-                break;
-            case AppStages.PULL_DOWNLOADING:
-                toastInfo(message);
-                break;
             case AppStages.PULL_DOWNLOADING_COMPLETED:
-                toastSuccess(message);
-                break;
-            case AppStages.PULL_DECRYPTING:
-                toastInfo(message);
-                break;
             case AppStages.PULL_DECRYPTING_COMPLETED:
-                toastSuccess(message);
-                break;
-            case AppStages.PULL_APPLYING:
-                toastInfo(message);
-                break;
             case AppStages.PULL_APPLYING_COMPLETED:
-                toastSuccess(message);
-                break;
             case AppStages.PULL_COMPLETED:
-                toastSuccess(message);
-                break;
-            case AppStages.SETTINGS_LOADING:
-                toastInfo(message);
-                break;
             case AppStages.SETTINGS_LOADING_COMPLETED:
-                toastSuccess(message);
-                break;
-            case AppStages.SETTINGS_UPDATING:
-                toastInfo(message);
-                break;
             case AppStages.SETTINGS_UPDATING_COMPLETED:
-                toastSuccess(message);
-                break;
-            case AppStages.APPLY_AUTO_SYNC_INTERVAL:
-                toastInfo(message);
-                break;
             case AppStages.APPLY_AUTO_SYNC_INTERVAL_COMPLETED:
-                toastSuccess(message);
-                break;
-            case AppStages.APPLY_SYNC_ON_CHANGE:
-                toastInfo(message);
-                break;
             case AppStages.APPLY_SYNC_ON_CHANGE_COMPLETED:
-                toastSuccess(message);
-                break;
             case AppStages.APPLY_COOKIE_SUCCESS:
+            case AppStages.SET_SECRETS_COMPLETED:
                 toastSuccess(message);
                 break;
             case AppStages.APPLY_COOKIE_FAILED:
                 toastError(message, error);
-                break;
-            case AppStages.SET_SECRETS:
-                toastInfo(message);
-                break;
-            case AppStages.SET_SECRETS_COMPLETED:
-                toastSuccess(message);
                 break;
             default:
                 console.warn(`Unhandled stage: ${stage}`);
@@ -151,13 +102,30 @@ export default function StageNotifier() {
     };
 
     useEffect(() => {
-        let port = state.port;
-        if (!port) {
-            return;
-        }
-        port.onMessage.addListener((message: AppEvent) => {
-            handleEventNotification(message);
-        });
-    }, [state.port, dispatch]);
-    return <div></div>;
+        const port = state.port;
+        if (!port) return;
+
+        const listener = (message: AppEvent) => {
+            lastEventRef.current = message;
+            if (debounceRef.current) {
+                clearTimeout(debounceRef.current);
+            }
+            debounceRef.current = setTimeout(() => {
+                if (lastEventRef.current) {
+                    handleEventNotification(lastEventRef.current);
+                    lastEventRef.current = null;
+                }
+            }, 500);
+        };
+
+        port.onMessage.addListener(listener);
+        return () => {
+            port.onMessage.removeListener(listener);
+            if (debounceRef.current) {
+                clearTimeout(debounceRef.current);
+            }
+        };
+    }, [state.port]);
+
+    return null;
 }

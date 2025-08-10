@@ -7,8 +7,6 @@ import { CryptoService } from '../shared/crypto.service';
 import { GistRepo } from '../shared/gist.repo';
 
 export class PullService {
-    private static _instance: PullService;
-
     constructor(
         private port: chrome.runtime.Port | null,
         protected cookieRepo: CookieRepo = CookieRepo.getInstance(),
@@ -27,13 +25,10 @@ export class PullService {
                     : AppStages.PULL_DOWNLOADING;
             void this.emitEvent(stage, msg.title, undefined, msg.detail);
         });
-    }
 
-    public static getInstance(port: chrome.runtime.Port): PullService {
-        if (!PullService._instance) {
-            PullService._instance = new PullService(port);
-        }
-        return PullService._instance;
+        this.port?.onDisconnect.addListener(() => {
+            this.port = null;
+        });
     }
 
     public selfRegister() {

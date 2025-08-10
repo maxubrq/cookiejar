@@ -208,8 +208,8 @@ async function handleSetSecrets(port: chrome.runtime.Port | null, message: PortM
     await localStorageRepo.setItem(
         LOCAL_STORAGE_KEYS.SECRETS,
         {
-            ghp: btoa(ghp),
-            passPhrase: btoa(passPhrase)
+            ghp: btoa(ghp ?? ''),
+            passPhrase: btoa(passPhrase ?? '')
         }
     );
 
@@ -232,8 +232,8 @@ function startListeningForPort() {
 
         console.info(`Connected to port: ${PORT.name}`);
         const pushService = new PushService(PORT);
-        const pullService = PullService.getInstance(PORT);
-        const settingsService = SettingsService.getInstance(PORT);
+        const pullService = new PullService(PORT);
+        const settingsService = new SettingsService(PORT);
         pushService.selfRegister();
         pullService.selfRegister();
         settingsService.selfRegister();
@@ -255,12 +255,7 @@ function startListeningForPort() {
             PORT = null;
         });
     });
-
-    chrome.runtime.onSuspend.addListener(async () => {
-        await PORT?.disconnect();
-        PORT = null;
-        console.info(`Suspending service worker`);
-    });
+    
     console.info(`Listening for port: ${PORT_NAME}`);
 }
 
