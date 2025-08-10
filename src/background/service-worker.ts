@@ -255,6 +255,12 @@ function startListeningForPort() {
             PORT = null;
         });
     });
+
+    chrome.runtime.onSuspend.addListener(async () => {
+        await PORT?.disconnect();
+        PORT = null;
+        console.info(`Suspending service worker`);
+    });
     console.info(`Listening for port: ${PORT_NAME}`);
 }
 
