@@ -10,7 +10,7 @@ export class PushService {
     private static _instance: PushService;
 
     constructor(
-        private port: chrome.runtime.Port,
+        private port: chrome.runtime.Port | null,
         protected cookieRepo: CookieRepo = CookieRepo.getInstance(),
         protected storageRepo: LocalStorageRepo = LocalStorageRepo.getInstance(),
         protected gistRepo: GistRepo = GistRepo.getInstance(),
@@ -27,7 +27,7 @@ export class PushService {
     }
 
     public selfRegister() {
-        this.port.onMessage.addListener((message: PortMessage) => {
+        this.port?.onMessage.addListener((message: PortMessage) => {
             if (message.command !== PortCommands.PUSH) return;
             this.handlePush(message.payload);
         });
@@ -38,16 +38,18 @@ export class PushService {
         message: string,
         process?: number,
         error?: string,
+        latestSyncTimestamp?: number
     ) {
-        if (this.port) {
-            this.port.postMessage({
+        try {
+            this.port?.postMessage({
                 message,
                 stage,
                 process,
                 error,
+                latestSyncTimestamp,
             } as AppEvent);
-        } else {
-            console.error('Port is not connected');
+        } catch (error) {
+            console.error('Error emitting event:', error);
         }
     }
 
@@ -108,10 +110,13 @@ export class PushService {
                     cookies.map((c) => toOriginPermissionPattern(c.domain)),
                 ),
             ).filter((c) => c !== null);
+
+            const latestSyncTimestamp = Date.now();
             const encryptedResult = await this.cryptoService.encrypt(
                 cookies,
                 allOrigins,
                 passPhrase,
+                latestSyncTimestamp
             );
             if (!encryptedResult) {
                 await this.emitEvent(
@@ -180,7 +185,7 @@ export class PushService {
             const newSettings: CjSettings = {
                 ...settings,
                 gistId,
-                lastSyncTimestamp: Date.now(),
+                lastSyncTimestamp: latestSyncTimestamp,
             };
 
             await this.storageRepo.setItem(
@@ -192,6 +197,8 @@ export class PushService {
                 AppStages.PUSH_COMPLETED,
                 `Push process completed successfully -- ${cookies.length} cookies pushed to Gist: ${gistId}`,
                 100,
+                undefined,
+                latestSyncTimestamp
             );
         } catch (error: any) {
             console.error('Error handling push message:', error);

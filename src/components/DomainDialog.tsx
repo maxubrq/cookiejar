@@ -13,6 +13,7 @@ import { Input } from './ui/input';
 import { toast } from 'sonner';
 import { LocalStorageRepo, requestDomainCookieAccess, toOriginPermissionPattern } from '@/features/shared';
 import { LOCAL_STORAGE_KEYS } from '@/lib';
+import { ScrollArea } from './ui/scroll-area';
 
 // --------------------------------------------------------------------------
 
@@ -139,31 +140,33 @@ export function DomainDialog({ children }: { children?: React.ReactNode }) {
                     </div>
 
                     {/* DOMAIN LIST */}
-                    <div className="w-full rounded-md border border-gray-200">
-                        {domains.length === 0 ? (
-                            <div className="p-3 text-sm text-gray-500">No domains added.</div>
-                        ) : (
-                            <ul className="divide-y divide-gray-200">
-                                {domains.map((origin) => (
-                                    <li
-                                        key={origin}
-                                        className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-2"
-                                    >
-                                        <span className="truncate text-[#333]" title={origin}>
-                                            {origin}
-                                        </span>
-                                        <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            onClick={() => handleRemoveDomain(origin)}
+                    <ScrollArea className='h-[400px] overflow-y-auto'>
+                        <div className="w-full rounded-md border border-gray-200">
+                            {domains.length === 0 ? (
+                                <div className="p-3 text-sm text-gray-500">No domains added.</div>
+                            ) : (
+                                <ul className="divide-y divide-gray-200">
+                                    {domains.map((origin) => (
+                                        <li
+                                            key={origin}
+                                            className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-2"
                                         >
-                                            Remove
-                                        </Button>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
+                                            <span className="truncate text-[#333]" title={origin}>
+                                                {origin}
+                                            </span>
+                                            <Button
+                                                variant="destructive"
+                                                size="sm"
+                                                onClick={() => handleRemoveDomain(origin)}
+                                            >
+                                                Remove
+                                            </Button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    </ScrollArea>
                 </DialogContent>
             </Dialog>
         </div>

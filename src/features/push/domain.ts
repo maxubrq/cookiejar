@@ -36,6 +36,10 @@ export enum AppStages {
     APPLY_SYNC_ON_CHANGE_COMPLETED = 'apply_sync_on_change_completed',
     APPLY_COOKIE_SUCCESS = 'apply_cookie_success',
     APPLY_COOKIE_FAILED = 'apply_cookie_failed',
+
+    // ---- Set Secrets Stages ---- //
+    SET_SECRETS = 'set_secrets',
+    SET_SECRETS_COMPLETED = 'set_secrets_completed',
 }
 
 export type AppEvent = {
@@ -45,4 +49,5 @@ export type AppEvent = {
     error?: string; // Optional error message if the stage is ERROR
     urls?: string[]; // Optional list of URLs involved in the event
     cookies?: chrome.cookies.Cookie[]; // Optional list of cookies involved in the event
+    latestSyncTimestamp?: number; // Optional timestamp of the latest sync
 };

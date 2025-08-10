@@ -125,6 +125,7 @@ export enum PortCommands {
     ADD_SYNC_URL = 'add_sync_url',
     REMOVE_SYNC_URL = 'remove_sync_url',
     SET_SETTINGS = 'set_settings',
+    SET_SECRETS = 'set_secrets',
 
     // Settings scope commands
     APPLY_SETTINGS = 'apply_settings',

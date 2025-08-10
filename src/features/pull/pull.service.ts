@@ -10,7 +10,7 @@ export class PullService {
     private static _instance: PullService;
 
     constructor(
-        private port: chrome.runtime.Port,
+        private port: chrome.runtime.Port | null,
         protected cookieRepo: CookieRepo = CookieRepo.getInstance(),
         protected storageRepo: LocalStorageRepo = LocalStorageRepo.getInstance(),
         protected gistRepo: GistRepo = GistRepo.getInstance(),
@@ -37,7 +37,7 @@ export class PullService {
     }
 
     public selfRegister() {
-        this.port.onMessage.addListener(async (message: PortMessage) => {
+        this.port?.onMessage.addListener(async (message: PortMessage) => {
             if (message.command === PortCommands.PULL) {
                 await this.handlePull(message.payload);
             } else if (message.command === PortCommands.APPLY_COOKIES) {
@@ -145,7 +145,7 @@ export class PullService {
     public async handlePull(_: any) {
         try {
             console.info('Handling pull request...');
-            await this.port.postMessage((<AppEvent>{
+            await this.port?.postMessage((<AppEvent>{
                 stage: AppStages.PULL_WAIT_FOR_PERMISSION,
                 message: 'Waiting for permission to access cookies',
                 cookies: [],
@@ -261,13 +261,15 @@ export class PullService {
             );
             let cookies: chrome.cookies.Cookie[] = [];
             let origins: string[] = [];
+            let lastSyncTimestamp: number;
             try {
-                const { plain: decrypted, origins: decryptedOrigins } =
+                const { plain: decrypted, origins: decryptedOrigins, latestSyncTimestamp: decryptedLatestSyncTimestamp } =
                     await this.cryptoService.decrypt(
                         contentFile.content,
                         passPhrase,
                     );
                 origins = decryptedOrigins;
+                lastSyncTimestamp = decryptedLatestSyncTimestamp;
                 cookies = Array.isArray(decrypted)
                     ? (decrypted as chrome.cookies.Cookie[])
                     : [];
@@ -295,12 +297,13 @@ export class PullService {
             );
             try {
                 console.info('Applying cookies for origins:', origins);
-                this.port.postMessage(<AppEvent>{
+                this.port?.postMessage(<AppEvent>{
                     stage: AppStages.PULL_WAIT_FOR_PERMISSION,
                     message: 'Requesting permission to access cookie domains',
                     progress: 80,
                     urls: origins,
                     cookies: cookies,
+                    latestSyncTimestamp: lastSyncTimestamp,
                 });
                 return;
             } catch (e: any) {

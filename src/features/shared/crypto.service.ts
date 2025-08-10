@@ -4,6 +4,7 @@ export type EnryptedContent = {
     iv: string; // Base64 encoded initialization vector for AES-GCM
     ct: string; // Base64 encoded ciphertext of the encrypted content
     ors: string; // Base64 encoded origin permissions
+    tt: string; // Base64 encoded latest sync timestamp
 };
 
 export class CryptoService {
@@ -12,7 +13,7 @@ export class CryptoService {
     private _PBKDF_IV_LENGTH = 12; // 12 bytes for AES-GCM (GCM Standard)
     private static _instance: CryptoService;
 
-    private constructor() {}
+    private constructor() { }
 
     public static getInstance(): CryptoService {
         if (!CryptoService._instance) {
@@ -60,6 +61,7 @@ export class CryptoService {
         plain: any,
         origins: string[],
         passPhrase: string,
+        latestSyncTimestamp?: number,
     ): Promise<string> {
         const { aesKey, salt } = await this.deriveKey(passPhrase);
         const iv = crypto.getRandomValues(
@@ -80,12 +82,17 @@ export class CryptoService {
             plainOrigins,
         );
 
+        const timestampBuf = new TextEncoder().encode(
+            JSON.stringify(latestSyncTimestamp || Date.now()),
+        ).buffer;
+
         const content: EnryptedContent = {
             v: 1, // format version
             salt: this.buf2b64(salt),
             iv: this.buf2b64(iv.buffer),
             ct: this.buf2b64(cipherBuf),
             ors: this.buf2b64(cipherOrigins),
+            tt: this.buf2b64(timestampBuf),
         };
 
         return JSON.stringify(content);
@@ -97,8 +104,9 @@ export class CryptoService {
     ): Promise<{
         plain: any;
         origins: string[];
+        latestSyncTimestamp: number;
     }> {
-        const { salt, iv, ct, ors } = JSON.parse(encrypted) as EnryptedContent;
+        const { salt, iv, ct, ors, tt } = JSON.parse(encrypted) as EnryptedContent;
         const { aesKey } = await this.deriveKey(
             passPhrase,
             new Uint8Array(this.b642buf(salt)),
@@ -113,9 +121,11 @@ export class CryptoService {
             aesKey,
             this.b642buf(ors),
         );
+        const plainTimestampBuf = new TextDecoder().decode(this.b642buf(tt));
         return {
             plain: JSON.parse(new TextDecoder().decode(plainBuf)),
             origins: JSON.parse(new TextDecoder().decode(plainOrigins)),
+            latestSyncTimestamp: new Date(Number(plainTimestampBuf)).getTime(),
         };
     }
 }

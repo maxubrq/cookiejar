@@ -1,13 +1,15 @@
-import { CjSettings, PortCommands, PortMessage } from '@/domains';
+import { CjSecrets, CjSettings, PortCommands, PortMessage } from '@/domains';
 import { PullService } from '@/features/pull';
 import { AppEvent, AppStages, PushService } from '@/features/push';
 import { SettingsService } from '@/features/settings';
-import { PORT_NAME } from '@/lib';
+import { LocalStorageRepo } from '@/features/shared';
+import { LOCAL_STORAGE_KEYS, PORT_NAME } from '@/lib';
 
 const AUTO_SYNC_INTERVAL_NAME = 'cookie_jar_auto_sync_interval';
 const COOKIE_CHANGE_DEBOUNCE_ALARM = 'cookie_jar_cookie_change_debounce';
 // 1 minute:
 const COOKIE_DEBOUNCE_MS = 60_000;
+let PORT: chrome.runtime.Port | null = null;
 
 // ------------------------------------------------------------------
 // Pattern compile & match
@@ -148,14 +150,90 @@ function registerForSidePanel() {
     });
 }
 
+async function handleApplySettings(port: chrome.runtime.Port | null, message: PortMessage) {
+    const {
+        autoSyncEnabled: autoSync,
+        syncIntervalInMinutes,
+        syncOnChange,
+        syncUrls,
+    } = message.payload as CjSettings;
+
+    console.info('Applying settings:', message.payload);
+
+    // Update toggles for listeners
+    autoSyncEnabled = !!autoSync;
+    syncOnChangeEnabled = !!syncOnChange;
+
+    // Update compiled patterns from syncUrls
+    currentPatterns = compilePatterns(syncUrls ?? []);
+
+    // Handle periodic auto-sync
+    await chrome.alarms.clear(AUTO_SYNC_INTERVAL_NAME);
+    if (autoSync && Number.isFinite(syncIntervalInMinutes) && (syncIntervalInMinutes ?? 0) > 0) {
+        console.info(`Setting auto sync interval to ${syncIntervalInMinutes} minutes`);
+        chrome.alarms.create(AUTO_SYNC_INTERVAL_NAME, {
+            periodInMinutes: syncIntervalInMinutes!,
+        });
+
+        port?.postMessage(<AppEvent>{
+            stage: AppStages.APPLY_AUTO_SYNC_INTERVAL_COMPLETED,
+            message: `Auto sync interval set to ${syncIntervalInMinutes} minutes`,
+        });
+    } else {
+        console.info('Disabling auto sync interval');
+        chrome.alarms.clear(AUTO_SYNC_INTERVAL_NAME);
+        port?.postMessage(<AppEvent>{
+            stage: AppStages.APPLY_AUTO_SYNC_INTERVAL_COMPLETED,
+            message: 'Auto sync disabled',
+        });
+    }
+
+    // Manage cookie-change debounce wiring based on toggles
+    if (autoSync && syncOnChange) {
+        attachCookieChangeDebounced();
+    } else {
+        detachCookieChange();
+    }
+}
+
+async function handleSetSecrets(port: chrome.runtime.Port | null, message: PortMessage) {
+    const { ghp, passPhrase } = message.payload as CjSecrets;
+
+    port?.postMessage(<AppEvent>{
+        stage: AppStages.SET_SECRETS,
+        message: 'Updating secrets...',
+    });
+
+    const localStorageRepo = LocalStorageRepo.getInstance();
+    await localStorageRepo.setItem(
+        LOCAL_STORAGE_KEYS.SECRETS,
+        {
+            ghp: btoa(ghp),
+            passPhrase: btoa(passPhrase)
+        }
+    );
+
+    port?.postMessage(<AppEvent>{
+        stage: AppStages.SET_SECRETS_COMPLETED,
+        message: 'Secrets updated successfully',
+    });
+}
+
 function startListeningForPort() {
     chrome.runtime.onConnect.addListener((port) => {
         if (port.name !== PORT_NAME) return;
 
-        console.info(`Connected to port: ${port.name}`);
-        const pushService = new PushService(port);
-        const pullService = PullService.getInstance(port);
-        const settingsService = SettingsService.getInstance(port);
+        PORT = port;
+
+        if (!PORT) {
+            console.error('Failed to establish port connection');
+            return;
+        }
+
+        console.info(`Connected to port: ${PORT.name}`);
+        const pushService = new PushService(PORT);
+        const pullService = PullService.getInstance(PORT);
+        const settingsService = SettingsService.getInstance(PORT);
         pushService.selfRegister();
         pullService.selfRegister();
         settingsService.selfRegister();
@@ -164,52 +242,17 @@ function startListeningForPort() {
         ensureAlarmListener();
         attachCookieChangeDebounced();
 
-        port.onMessage.addListener(async (message: PortMessage) => {
-            if (message.command !== PortCommands.APPLY_SETTINGS) return;
-
-            const {
-                autoSyncEnabled: autoSync,
-                syncIntervalInMinutes,
-                syncOnChange,
-                syncUrls,
-            } = message.payload as CjSettings;
-
-            console.info('Applying settings:', message.payload);
-
-            // Update toggles for listeners
-            autoSyncEnabled = !!autoSync;
-            syncOnChangeEnabled = !!syncOnChange;
-
-            // Update compiled patterns from syncUrls
-            currentPatterns = compilePatterns(syncUrls ?? []);
-
-            // Handle periodic auto-sync
-            await chrome.alarms.clear(AUTO_SYNC_INTERVAL_NAME);
-            if (autoSync && Number.isFinite(syncIntervalInMinutes) && (syncIntervalInMinutes ?? 0) > 0) {
-                console.info(`Setting auto sync interval to ${syncIntervalInMinutes} minutes`);
-                chrome.alarms.create(AUTO_SYNC_INTERVAL_NAME, {
-                    periodInMinutes: syncIntervalInMinutes!,
-                });
-
-                port.postMessage(<AppEvent>{
-                    stage: AppStages.APPLY_AUTO_SYNC_INTERVAL_COMPLETED,
-                    message: `Auto sync interval set to ${syncIntervalInMinutes} minutes`,
-                });
-            } else {
-                console.info('Disabling auto sync interval');
-                chrome.alarms.clear(AUTO_SYNC_INTERVAL_NAME);
-                port.postMessage(<AppEvent>{
-                    stage: AppStages.APPLY_AUTO_SYNC_INTERVAL_COMPLETED,
-                    message: 'Auto sync disabled',
-                });
+        PORT.onMessage.addListener(async (message: PortMessage) => {
+            if (message.command === PortCommands.APPLY_SETTINGS) {
+                await handleApplySettings(PORT, message);
+            } else if (message.command === PortCommands.SET_SECRETS) {
+                await handleSetSecrets(PORT, message);
             }
+        });
 
-            // Manage cookie-change debounce wiring based on toggles
-            if (autoSync && syncOnChange) {
-                attachCookieChangeDebounced();
-            } else {
-                detachCookieChange();
-            }
+        PORT.onDisconnect.addListener(() => {
+            console.info(`Disconnected from port: ${PORT?.name}`);
+            PORT = null;
         });
     });
     console.info(`Listening for port: ${PORT_NAME}`);

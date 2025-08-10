@@ -1,3 +1,4 @@
+import CredentialDialog from '@/components/CredentialDialog';
 import { DomainDialog } from '@/components/DomainDialog';
 import { GithubTokenCard } from '@/components/GithubTokenCard';
 import Logo from '@/components/Logo';
@@ -23,6 +24,7 @@ export default function App() {
     const { dispatch } = useCookieJarContext();
     const [waitForPermissionUrls, setWaitForPermissionUrls] = useState<string[]>([]);
     const [waitForPermissionCookies, setWaitForPermissionCookies] = useState<chrome.cookies.Cookie[]>([]);
+    const [latestSyncTimestamp, setLatestSyncTimestamp] = useState<number | undefined>(state.settings.lastSyncTimestamp);
 
     const fetchSecrets = async () => {
         const localeStorage = LocalStorageRepo.getInstance();
@@ -43,6 +45,17 @@ export default function App() {
             });
         }
     };
+
+    useEffect(()=>{
+        const loadLatestSyncTimestamp = async () => {
+            const localeStorage = LocalStorageRepo.getInstance();
+            const settings = await localeStorage.getItem<CjSettings>(LOCAL_STORAGE_KEYS.SETTINGS);
+            if (settings) {
+                setLatestSyncTimestamp(settings.lastSyncTimestamp);
+            }
+        };
+        loadLatestSyncTimestamp();
+    }, []);
 
     useEffect(() => {
         const port = state.port;
@@ -75,6 +88,9 @@ export default function App() {
                 const origins = message.urls ?? [];
                 setWaitForPermissionUrls(origins);
                 setWaitForPermissionCookies(message.cookies ?? []);
+                setLatestSyncTimestamp(message.latestSyncTimestamp);
+            } else if (message.stage === AppStages.PUSH_COMPLETED) {
+                setLatestSyncTimestamp(message.latestSyncTimestamp);
             }
         });
     }, [dispatch, setWaitForPermissionUrls]);
@@ -119,6 +135,9 @@ export default function App() {
                 <DomainDialog>
                     <button className='bg-[#333] text-[#fafafa] rounded-full px-4 py-2'>Domains</button>
                 </DomainDialog>
+                <CredentialDialog>
+                    <button className='bg-[red] text-[#fafafa] rounded-full px-4 py-2'>Credentials</button>
+                </CredentialDialog>
             </div>
 
             <motion.div
@@ -138,7 +157,7 @@ export default function App() {
                 transition={{ duration: 0.3, delay: 0.1 }}
                 className="flex flex-col items-center justify-center p-4"
             >
-                <h1 className="mb-4">
+                <h1 className="mb-4 text-4xl font-bold">
                     CookieJar <em>®</em>
                 </h1>
                 <p>Welcome to the cookiejar extension!</p>
@@ -187,9 +206,9 @@ export default function App() {
                     >
                         {/* LAST SYNC */}
                         {
-                            state.settings.lastSyncTimestamp && (
+                            latestSyncTimestamp && (
                                 <p className="text-sm text-gray-500 mb-2">
-                                    Last Sync: {new Date(state.settings.lastSyncTimestamp).toLocaleString()}
+                                    Last Sync: {new Date(latestSyncTimestamp).toLocaleString()}
                                 </p>
                             )
                         }
