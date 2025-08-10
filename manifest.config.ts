@@ -30,7 +30,7 @@ export default defineManifest({
     'cookies',
     'alarms',
   ],
-  host_permissions: ["<all_urls>"],
+  optional_host_permissions: ["<all_urls>"],
   content_scripts: [{
     js: ['src/content/main.tsx'],
     matches: ['https://*/*'],
