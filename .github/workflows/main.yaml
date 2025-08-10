@@ -1,0 +1,52 @@
+name: Build Chrome Extension
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install pnpm
+      run: npm install -g pnpm
+
+    - name: Install dependencies
+      run: pnpm install
+
+    - name: Build Chrome Extension
+      run: pnpm run build
+
+    - name: Zip extension
+      run: |
+        # Check if dist directory exists
+        if [ -d "dist" ]; then
+          cd dist
+          zip -r ../cookie_jar.zip .
+        else
+          echo "dist directory does not exist"
+        fi
+    - name: Commit changes
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add cookie_jar.zip
+        git commit -m "Add built extension"
+        git push
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: cookie_jar.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
