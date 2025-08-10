@@ -29,7 +29,6 @@ export default function SettingsDialog({
             const localStorage = await LocalStorageRepo.getInstance();
             const settings = await localStorage.getItem<CjSettings>(LOCAL_STORAGE_KEYS.SETTINGS);
             if (!settings) {
-                alert('No setting')
                 return;
             }
             dispatch({ type: 'SET_SETTINGS', payload: settings });
