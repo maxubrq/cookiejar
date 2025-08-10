@@ -58,14 +58,28 @@ export default function App() {
     }, []);
 
     useEffect(() => {
-        const port = state.port;
-        if (!port) return;
-        port.postMessage({
-            command: PortCommands.APPLY_SETTINGS,
-            payload: {
-                ...state.settings,
-            },
-        } as PortMessage);
+        const loadAndApplySettings = async (state: any) => {
+            let settings = state.settings;
+            if (!settings) {
+                settings = await LocalStorageRepo.getInstance().getItem<CjSettings>(LOCAL_STORAGE_KEYS.SETTINGS);
+                if (!settings) {
+                    settings = DEFAULT_CJ_SETTINGS;
+                }
+
+                await LocalStorageRepo.getInstance().setItem<CjSettings>(LOCAL_STORAGE_KEYS.SETTINGS, settings);
+                dispatch({ type: 'SET_SETTINGS', payload: settings });
+            }
+            const port = state.port;
+            if (!port) return;
+            port.postMessage({
+                command: PortCommands.APPLY_SETTINGS,
+                payload: {
+                    ...settings,
+                },
+            } as PortMessage);
+        }
+
+        loadAndApplySettings(state);
     }, [
         state.port,
         state.settings,
